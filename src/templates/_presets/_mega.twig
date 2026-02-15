@@ -1,0 +1,91 @@
+{#
+ # Mega Menu Preset
+ # Renders navigation as a mega menu with multi-column dropdown panels.
+ # Level 1 = top bar items, Level 2 = column headers, Level 3+ = links within columns.
+ #}
+{% set navId = options.id ?? 'freenav-' ~ menu.handle %}
+{% set navClass = options.class ?? 'freenav-mega' %}
+{% set activeClass = options.activeClass ?? 'active' %}
+
+<nav id="{{ navId }}" class="{{ navClass }}" aria-label="{{ menu.name }}">
+    <ul class="freenav-mega-bar" role="menubar">
+        {% nav node in nodes %}
+            {% if node.level == 1 %}
+                {% set hasChildren = node.getChildren() | length > 0 %}
+                {% set isActive = node.isActive() %}
+
+                <li class="freenav-mega-item{% if isActive %} {{ activeClass }}{% endif %}{% if hasChildren %} has-children{% endif %}" role="none">
+                    {% if node.getUrl() %}
+                        <a href="{{ node.getUrl() }}"
+                           class="freenav-mega-trigger{% if node.classes %} {{ node.classes }}{% endif %}"
+                           role="menuitem"
+                           {% if hasChildren %}aria-haspopup="true" aria-expanded="false"{% endif %}
+                           {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}
+                           {% if node.isCurrent() %}aria-current="page"{% endif %}>
+                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                            {{ node.title }}
+                            {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
+                        </a>
+                    {% else %}
+                        <button class="freenav-mega-trigger{% if node.classes %} {{ node.classes }}{% endif %}"
+                                type="button"
+                                role="menuitem"
+                                {% if hasChildren %}aria-haspopup="true" aria-expanded="false"{% endif %}>
+                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                            {{ node.title }}
+                            {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
+                        </button>
+                    {% endif %}
+
+                    {% ifchildren %}
+                        <div class="freenav-mega-panel" role="menu">
+                            <div class="freenav-mega-columns">
+                                {% children %}
+                            </div>
+                        </div>
+                    {% endifchildren %}
+                </li>
+            {% elseif node.level == 2 %}
+                <div class="freenav-mega-column">
+                    {% if node.getUrl() %}
+                        <a href="{{ node.getUrl() }}"
+                           class="freenav-mega-column-heading{% if node.classes %} {{ node.classes }}{% endif %}"
+                           {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}>
+                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                            {{ node.title }}
+                        </a>
+                    {% else %}
+                        <span class="freenav-mega-column-heading{% if node.classes %} {{ node.classes }}{% endif %}">
+                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                            {{ node.title }}
+                        </span>
+                    {% endif %}
+                    {% ifchildren %}
+                        <ul class="freenav-mega-list">
+                            {% children %}
+                        </ul>
+                    {% endifchildren %}
+                </div>
+            {% else %}
+                <li class="freenav-mega-link-item" role="none">
+                    {% if node.getUrl() %}
+                        <a href="{{ node.getUrl() }}"
+                           class="freenav-mega-link{% if node.classes %} {{ node.classes }}{% endif %}"
+                           role="menuitem"
+                           {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}>
+                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                            {{ node.title }}
+                            {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
+                        </a>
+                    {% else %}
+                        <span class="freenav-mega-link{% if node.classes %} {{ node.classes }}{% endif %}" role="menuitem">
+                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                            {{ node.title }}
+                            {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
+                        </span>
+                    {% endif %}
+                </li>
+            {% endif %}
+        {% endnav %}
+    </ul>
+</nav>

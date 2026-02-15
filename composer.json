@@ -1,0 +1,36 @@
+{
+  "name": "justinholtweb/craft-free-nav",
+  "description": "A free, full-featured navigation menu builder for Craft CMS 5",
+  "type": "craft-plugin",
+  "keywords": ["craft", "cms", "navigation", "menu", "nav"],
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "Justin Holt",
+      "homepage": "https://craft-freenav.com"
+    }
+  ],
+  "support": {
+    "issues": "https://github.com/justinholtweb/craft-free-nav/issues",
+    "source": "https://github.com/justinholtweb/craft-free-nav",
+    "docs": "https://craft-freenav.com/docs"
+  },
+  "require": {
+    "php": "^8.2",
+    "craftcms/cms": "^5.0.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "justinholt\\freenav\\": "src/"
+    }
+  },
+  "extra": {
+    "name": "FreeNav",
+    "handle": "free-nav",
+    "class": "justinholt\\freenav\\FreeNav",
+    "description": "A free, full-featured navigation menu builder for Craft CMS",
+    "developer": "Justin Holt",
+    "developerUrl": "https://craft-freenav.com",
+    "documentationUrl": "https://craft-freenav.com/docs"
+  }
+}

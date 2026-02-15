@@ -1,0 +1,47 @@
+{#
+ # Default Nav Preset
+ # Renders a simple unordered list with proper ARIA attributes.
+ #}
+{% set navId = options.id ?? 'freenav-' ~ menu.handle %}
+{% set navClass = options.class ?? '' %}
+{% set ulClass = options.ulClass ?? '' %}
+{% set liClass = options.liClass ?? '' %}
+{% set aClass = options.aClass ?? '' %}
+{% set activeClass = options.activeClass ?? 'active' %}
+{% set hasChildrenClass = options.hasChildrenClass ?? 'has-children' %}
+
+<nav id="{{ navId }}"{% if navClass %} class="{{ navClass }}"{% endif %} aria-label="{{ menu.name }}">
+    <ul{% if ulClass %} class="{{ ulClass }}"{% endif %}>
+        {% nav node in nodes %}
+            {% set isActive = node.isActive() %}
+            {% set nodeClasses = [] %}
+            {% if liClass %}{% set nodeClasses = nodeClasses | merge([liClass]) %}{% endif %}
+            {% if isActive %}{% set nodeClasses = nodeClasses | merge([activeClass]) %}{% endif %}
+            {% if node.getChildren() | length %}{% set nodeClasses = nodeClasses | merge([hasChildrenClass]) %}{% endif %}
+
+            <li{% if nodeClasses | length %} class="{{ nodeClasses | join(' ') }}"{% endif %}>
+                {% if node.getUrl() %}
+                    <a href="{{ node.getUrl() }}"
+                       {% if aClass %}class="{{ aClass }}{% if node.classes %} {{ node.classes }}{% endif %}"{% elseif node.classes %}class="{{ node.classes }}"{% endif %}
+                       {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}
+                       {% if node.isCurrent() %}aria-current="page"{% endif %}>
+                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                        {{ node.title }}
+                        {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
+                    </a>
+                {% else %}
+                    <span{% if node.classes %} class="{{ node.classes }}"{% endif %}>
+                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                        {{ node.title }}
+                        {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
+                    </span>
+                {% endif %}
+                {% ifchildren %}
+                    <ul{% if ulClass %} class="{{ ulClass }}"{% endif %}>
+                        {% children %}
+                    </ul>
+                {% endifchildren %}
+            </li>
+        {% endnav %}
+    </ul>
+</nav>

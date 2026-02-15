@@ -1,0 +1,53 @@
+{#
+ # Footer Nav Preset
+ # Renders navigation in column-based footer layout. Top-level items become column headers.
+ #}
+{% set navId = options.id ?? 'freenav-' ~ menu.handle %}
+{% set navClass = options.class ?? 'freenav-footer' %}
+
+<nav id="{{ navId }}" class="{{ navClass }}" aria-label="{{ menu.name }}">
+    <div class="freenav-footer-columns">
+        {% nav node in nodes %}
+            {% if node.level == 1 %}
+                <div class="freenav-footer-column">
+                    {% if node.getUrl() %}
+                        <a href="{{ node.getUrl() }}"
+                           class="freenav-footer-heading{% if node.classes %} {{ node.classes }}{% endif %}"
+                           {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}>
+                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                            {{ node.title }}
+                        </a>
+                    {% else %}
+                        <span class="freenav-footer-heading{% if node.classes %} {{ node.classes }}{% endif %}">
+                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                            {{ node.title }}
+                        </span>
+                    {% endif %}
+                    {% ifchildren %}
+                        <ul class="freenav-footer-list">
+                            {% children %}
+                        </ul>
+                    {% endifchildren %}
+                </div>
+            {% else %}
+                <li class="freenav-footer-item">
+                    {% if node.getUrl() %}
+                        <a href="{{ node.getUrl() }}"
+                           class="freenav-footer-link{% if node.classes %} {{ node.classes }}{% endif %}"
+                           {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}>
+                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                            {{ node.title }}
+                            {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
+                        </a>
+                    {% else %}
+                        <span class="freenav-footer-link{% if node.classes %} {{ node.classes }}{% endif %}">
+                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                            {{ node.title }}
+                            {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
+                        </span>
+                    {% endif %}
+                </li>
+            {% endif %}
+        {% endnav %}
+    </div>
+</nav>

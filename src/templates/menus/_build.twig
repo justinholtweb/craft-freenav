@@ -1,0 +1,301 @@
+{% extends 'free-nav/_layouts/base' %}
+
+{% set selectedSubnavItem = 'menus' %}
+
+{% set crumbs = [
+    { label: 'FreeNav', url: url('free-nav') },
+    { label: 'Menus'|t('free-nav'), url: url('free-nav/menus') },
+    { label: menu.name, url: url('free-nav/menus/' ~ menu.id) },
+] %}
+
+{% block actionButton %}
+    <div class="btngroup">
+        <button id="freenav-add-node-btn" class="btn submit" type="button">
+            {{ 'Add node'|t('free-nav') }}
+        </button>
+
+        <button class="btn menubtn" type="button"></button>
+        <div class="menu">
+            <ul>
+                <li>
+                    <a href="{{ actionUrl('free-nav/import-export/export', { menuId: menu.id }) }}">
+                        {{ 'Export JSON'|t('free-nav') }}
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+    {% if menu.instructions %}
+        <div class="field">
+            <div class="instructions">
+                <p>{{ menu.instructions }}</p>
+            </div>
+        </div>
+    {% endif %}
+
+    <div id="freenav-builder"
+         data-menu-id="{{ menu.id }}"
+         data-max-levels="{{ menu.maxLevels ?? '' }}"
+         data-max-nodes="{{ menu.maxNodes ?? '' }}"
+         data-site-id="{{ craft.app.sites.currentSite.id }}">
+
+        {% if nodes | length %}
+            <div class="freenav-nodes">
+                {% for node in nodes %}
+                    <div class="freenav-node"
+                         data-node-id="{{ node.id }}"
+                         data-level="{{ node.level }}"
+                         data-type="{{ node.nodeType }}"
+                         style="--node-level: {{ node.level }}">
+                        <div class="freenav-node-row">
+                            <span class="freenav-node-drag" title="{{ 'Drag to reorder'|t('free-nav') }}">
+                                <span data-icon="move"></span>
+                            </span>
+
+                            <span class="freenav-node-type" style="background-color: {{ node.getNodeType().color() }}">
+                                {{ node.getNodeType().label() }}
+                            </span>
+
+                            <span class="freenav-node-title">
+                                {{ node.title }}
+                            </span>
+
+                            {% if node.url %}
+                                <span class="freenav-node-url code light">
+                                    {{ node.getUrl() }}
+                                </span>
+                            {% endif %}
+
+                            <span class="freenav-node-actions">
+                                <button class="freenav-node-edit btn small"
+                                        data-node-id="{{ node.id }}"
+                                        type="button">
+                                    {{ 'Edit'|t('app') }}
+                                </button>
+                                <button class="freenav-node-toggle btn small{% if not node.enabled %} inactive{% endif %}"
+                                        data-node-id="{{ node.id }}"
+                                        data-enabled="{{ node.enabled ? '1' : '0' }}"
+                                        type="button"
+                                        title="{{ node.enabled ? 'Disable'|t('free-nav') : 'Enable'|t('free-nav') }}">
+                                    {{ node.enabled ? 'On' : 'Off' }}
+                                </button>
+                                <button class="freenav-node-delete btn small"
+                                        data-node-id="{{ node.id }}"
+                                        type="button"
+                                        title="{{ 'Delete'|t('app') }}">
+                                    <span data-icon="remove"></span>
+                                </button>
+                            </span>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="zilch freenav-empty-message">
+                <p>{{ 'No nodes yet. Click "Add node" to get started.'|t('free-nav') }}</p>
+            </div>
+        {% endif %}
+    </div>
+
+    {# Add Node Slide-out Panel #}
+    <div id="freenav-add-panel" class="hidden">
+        <div class="freenav-add-panel-content">
+            <h2>{{ 'Add Node'|t('free-nav') }}</h2>
+
+            <div class="field">
+                <div class="heading">
+                    <label for="freenav-node-type">{{ 'Type'|t('free-nav') }}</label>
+                </div>
+                <div class="input">
+                    <select id="freenav-node-type" class="fullwidth">
+                        {% for type in nodeTypes %}
+                            <option value="{{ type.value }}" data-is-element="{{ type.isElement ? '1' : '0' }}">
+                                {{ type.label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="field" id="freenav-title-field">
+                <div class="heading">
+                    <label for="freenav-node-title">{{ 'Title'|t('app') }}</label>
+                </div>
+                <div class="input">
+                    <input type="text" id="freenav-node-title" class="text fullwidth">
+                </div>
+            </div>
+
+            <div class="field" id="freenav-url-field">
+                <div class="heading">
+                    <label for="freenav-node-url">{{ 'URL'|t('app') }}</label>
+                </div>
+                <div class="input">
+                    <input type="text" id="freenav-node-url" class="text fullwidth" placeholder="https://">
+                </div>
+            </div>
+
+            <div class="field" id="freenav-element-field" style="display: none;">
+                <div class="heading">
+                    <label>{{ 'Select Element'|t('free-nav') }}</label>
+                </div>
+                <div class="input" id="freenav-element-select">
+                    {# Element selector will be injected via JS #}
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="heading">
+                    <label for="freenav-node-parent">{{ 'Parent'|t('app') }}</label>
+                </div>
+                <div class="input">
+                    <select id="freenav-node-parent" class="fullwidth">
+                        {% for option in parentOptions %}
+                            <option value="{{ option.value }}">{{ option.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <hr>
+
+            <div class="field">
+                <div class="heading">
+                    <label for="freenav-node-classes">{{ 'CSS Classes'|t('free-nav') }}</label>
+                </div>
+                <div class="input">
+                    <input type="text" id="freenav-node-classes" class="text fullwidth">
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="heading">
+                    <label>{{ 'Open in new window'|t('free-nav') }}</label>
+                </div>
+                <div class="input">
+                    <div id="freenav-node-newwindow" class="lightswitch" data-value="0">
+                        <div class="lightswitch-container">
+                            <div class="handle"></div>
+                        </div>
+                        <input type="hidden" value="0">
+                    </div>
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="heading">
+                    <label for="freenav-node-icon">{{ 'Icon Class'|t('free-nav') }}</label>
+                </div>
+                <div class="input">
+                    <input type="text" id="freenav-node-icon" class="text fullwidth" placeholder="fa-home">
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="heading">
+                    <label for="freenav-node-badge">{{ 'Badge Text'|t('free-nav') }}</label>
+                </div>
+                <div class="input">
+                    <input type="text" id="freenav-node-badge" class="text fullwidth" placeholder="New">
+                </div>
+            </div>
+
+            <div class="buttons">
+                <button id="freenav-add-submit" class="btn submit" type="button">
+                    {{ 'Add'|t('app') }}
+                </button>
+                <button id="freenav-add-cancel" class="btn" type="button">
+                    {{ 'Cancel'|t('app') }}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# Edit Node Slide-out Panel #}
+    <div id="freenav-edit-panel" class="hidden">
+        <div class="freenav-edit-panel-content">
+            <h2>{{ 'Edit Node'|t('free-nav') }}</h2>
+            <input type="hidden" id="freenav-edit-node-id">
+
+            <div class="field">
+                <div class="heading">
+                    <label for="freenav-edit-title">{{ 'Title'|t('app') }}</label>
+                </div>
+                <div class="input">
+                    <input type="text" id="freenav-edit-title" class="text fullwidth">
+                </div>
+            </div>
+
+            <div class="field" id="freenav-edit-url-field">
+                <div class="heading">
+                    <label for="freenav-edit-url">{{ 'URL'|t('app') }}</label>
+                </div>
+                <div class="input">
+                    <input type="text" id="freenav-edit-url" class="text fullwidth">
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="heading">
+                    <label for="freenav-edit-classes">{{ 'CSS Classes'|t('free-nav') }}</label>
+                </div>
+                <div class="input">
+                    <input type="text" id="freenav-edit-classes" class="text fullwidth">
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="heading">
+                    <label for="freenav-edit-url-suffix">{{ 'URL Suffix'|t('free-nav') }}</label>
+                </div>
+                <div class="input">
+                    <input type="text" id="freenav-edit-url-suffix" class="text fullwidth" placeholder="#section or ?param=value">
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="heading">
+                    <label>{{ 'Open in new window'|t('free-nav') }}</label>
+                </div>
+                <div class="input">
+                    <div id="freenav-edit-newwindow" class="lightswitch" data-value="0">
+                        <div class="lightswitch-container">
+                            <div class="handle"></div>
+                        </div>
+                        <input type="hidden" value="0">
+                    </div>
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="heading">
+                    <label for="freenav-edit-icon">{{ 'Icon Class'|t('free-nav') }}</label>
+                </div>
+                <div class="input">
+                    <input type="text" id="freenav-edit-icon" class="text fullwidth">
+                </div>
+            </div>
+
+            <div class="field">
+                <div class="heading">
+                    <label for="freenav-edit-badge">{{ 'Badge Text'|t('free-nav') }}</label>
+                </div>
+                <div class="input">
+                    <input type="text" id="freenav-edit-badge" class="text fullwidth">
+                </div>
+            </div>
+
+            <div class="buttons">
+                <button id="freenav-edit-submit" class="btn submit" type="button">
+                    {{ 'Save'|t('app') }}
+                </button>
+                <button id="freenav-edit-cancel" class="btn" type="button">
+                    {{ 'Cancel'|t('app') }}
+                </button>
+            </div>
+        </div>
+    </div>
+{% endblock %}

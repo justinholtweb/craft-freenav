@@ -1,0 +1,50 @@
+{#
+ # Dropdown Nav Preset
+ # Renders navigation with dropdown submenus and proper ARIA for accessible dropdowns.
+ #}
+{% set navId = options.id ?? 'freenav-' ~ menu.handle %}
+{% set navClass = options.class ?? 'freenav-dropdown' %}
+{% set activeClass = options.activeClass ?? 'active' %}
+{% set hasChildrenClass = options.hasChildrenClass ?? 'has-children' %}
+
+<nav id="{{ navId }}" class="{{ navClass }}" aria-label="{{ menu.name }}">
+    <ul class="freenav-dropdown-list" role="menubar">
+        {% nav node in nodes %}
+            {% set isActive = node.isActive() %}
+            {% set hasChildren = node.getChildren() | length > 0 %}
+            {% set liClasses = [] %}
+            {% if isActive %}{% set liClasses = liClasses | merge([activeClass]) %}{% endif %}
+            {% if hasChildren %}{% set liClasses = liClasses | merge([hasChildrenClass]) %}{% endif %}
+
+            <li class="freenav-dropdown-item{% if liClasses | length %} {{ liClasses | join(' ') }}{% endif %}" role="none">
+                {% if node.getUrl() %}
+                    <a href="{{ node.getUrl() }}"
+                       class="freenav-dropdown-link{% if node.classes %} {{ node.classes }}{% endif %}"
+                       role="menuitem"
+                       {% if hasChildren %}aria-haspopup="true" aria-expanded="false"{% endif %}
+                       {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}
+                       {% if node.isCurrent() %}aria-current="page"{% endif %}>
+                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                        {{ node.title }}
+                        {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
+                        {% if hasChildren %}<span class="freenav-dropdown-arrow" aria-hidden="true"></span>{% endif %}
+                    </a>
+                {% else %}
+                    <span class="freenav-dropdown-link{% if node.classes %} {{ node.classes }}{% endif %}"
+                          role="menuitem"
+                          {% if hasChildren %}aria-haspopup="true" aria-expanded="false"{% endif %}>
+                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                        {{ node.title }}
+                        {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
+                        {% if hasChildren %}<span class="freenav-dropdown-arrow" aria-hidden="true"></span>{% endif %}
+                    </span>
+                {% endif %}
+                {% ifchildren %}
+                    <ul class="freenav-dropdown-submenu" role="menu">
+                        {% children %}
+                    </ul>
+                {% endifchildren %}
+            </li>
+        {% endnav %}
+    </ul>
+</nav>

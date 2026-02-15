@@ -1,0 +1,93 @@
+{% extends 'free-nav/_layouts/base' %}
+
+{% set title = 'Settings'|t('free-nav') %}
+{% set selectedSubnavItem = 'settings' %}
+
+{% block content %}
+    <form method="post" accept-charset="UTF-8">
+        {{ csrfInput() }}
+        {{ actionInput('free-nav/menus/save-settings') }}
+        {{ redirectInput('free-nav/settings') }}
+
+        <h2>{{ 'Cache'|t('free-nav') }}</h2>
+
+        {{ forms.lightswitchField({
+            label: 'Enable Caching'|t('free-nav'),
+            instructions: 'Cache rendered menu HTML for better performance.'|t('free-nav'),
+            id: 'cacheEnabled',
+            name: 'cacheEnabled',
+            on: settings.cacheEnabled,
+        }) }}
+
+        {{ forms.textField({
+            label: 'Cache Duration'|t('free-nav'),
+            instructions: 'How long to cache menu HTML (in seconds).'|t('free-nav'),
+            id: 'cacheDuration',
+            name: 'cacheDuration',
+            value: settings.cacheDuration,
+            type: 'number',
+            min: 0,
+            size: 8,
+        }) }}
+
+        <hr>
+        <h2>{{ 'Rendering'|t('free-nav') }}</h2>
+
+        {{ forms.lightswitchField({
+            label: 'Enable ARIA Attributes'|t('free-nav'),
+            instructions: 'Automatically add ARIA attributes to rendered menus for accessibility.'|t('free-nav'),
+            id: 'ariaEnabled',
+            name: 'ariaEnabled',
+            on: settings.ariaEnabled,
+        }) }}
+
+        {{ forms.selectField({
+            label: 'Default Preset'|t('free-nav'),
+            instructions: 'The default rendering preset when none is specified.'|t('free-nav'),
+            id: 'defaultPreset',
+            name: 'defaultPreset',
+            options: [
+                { label: 'Default', value: 'default' },
+                { label: 'Dropdown', value: 'dropdown' },
+                { label: 'Sidebar', value: 'sidebar' },
+                { label: 'Breadcrumb', value: 'breadcrumb' },
+                { label: 'Footer', value: 'footer' },
+                { label: 'Mega Menu', value: 'mega' },
+            ],
+            value: settings.defaultPreset,
+        }) }}
+
+        {{ forms.textField({
+            label: 'Active Class'|t('free-nav'),
+            instructions: 'CSS class applied to active menu items.'|t('free-nav'),
+            id: 'activeClass',
+            name: 'activeClass',
+            value: settings.activeClass,
+            class: 'code',
+        }) }}
+
+        {{ forms.textField({
+            label: 'Has Children Class'|t('free-nav'),
+            instructions: 'CSS class applied to items with children.'|t('free-nav'),
+            id: 'hasChildrenClass',
+            name: 'hasChildrenClass',
+            value: settings.hasChildrenClass,
+            class: 'code',
+        }) }}
+
+        <hr>
+        <h2>{{ 'API'|t('free-nav') }}</h2>
+
+        {{ forms.lightswitchField({
+            label: 'Enable REST API'|t('free-nav'),
+            instructions: 'Enable the built-in REST API endpoints.'|t('free-nav'),
+            id: 'restApiEnabled',
+            name: 'restApiEnabled',
+            on: settings.restApiEnabled,
+        }) }}
+
+        <div class="buttons">
+            <button type="submit" class="btn submit">{{ 'Save'|t('app') }}</button>
+        </div>
+    </form>
+{% endblock %}

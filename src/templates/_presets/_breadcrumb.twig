@@ -1,0 +1,31 @@
+{#
+ # Breadcrumb Preset
+ # Renders nodes as a breadcrumb trail with proper ARIA for accessible breadcrumbs.
+ #}
+{% set navId = options.id ?? 'freenav-breadcrumb' %}
+{% set navClass = options.class ?? 'freenav-breadcrumb' %}
+
+<nav id="{{ navId }}" class="{{ navClass }}" aria-label="{{ 'Breadcrumb'|t('free-nav') }}">
+    <ol class="freenav-breadcrumb-list">
+        {% for node in nodes %}
+            <li class="freenav-breadcrumb-item{% if loop.last %} freenav-breadcrumb-current{% endif %}">
+                {% if loop.last %}
+                    <span aria-current="page"{% if node.classes %} class="{{ node.classes }}"{% endif %}>
+                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                        {{ node.title }}
+                    </span>
+                {% elseif node.getUrl() %}
+                    <a href="{{ node.getUrl() }}"{% if node.classes %} class="{{ node.classes }}"{% endif %}>
+                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                        {{ node.title }}
+                    </a>
+                {% else %}
+                    <span{% if node.classes %} class="{{ node.classes }}"{% endif %}>
+                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                        {{ node.title }}
+                    </span>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ol>
+</nav>

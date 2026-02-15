@@ -1,0 +1,58 @@
+{% extends 'free-nav/_layouts/base' %}
+
+{% set title = 'Menus'|t('free-nav') %}
+{% set selectedSubnavItem = 'menus' %}
+
+{% set newMenuUrl = url('free-nav/menus/new') %}
+
+{% block actionButton %}
+    {% if currentUser.can('freeNav-manageMenus') or currentUser.admin %}
+        <a href="{{ newMenuUrl }}" class="btn submit">{{ 'New menu'|t('free-nav') }}</a>
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+    {% if menus | length %}
+        <div class="tableview">
+            <table class="data fullwidth">
+                <thead>
+                    <tr>
+                        <th>{{ 'Name'|t('app') }}</th>
+                        <th>{{ 'Handle'|t('app') }}</th>
+                        <th>{{ 'Nodes'|t('free-nav') }}</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for menu in menus %}
+                        <tr data-id="{{ menu.id }}" data-name="{{ menu.name }}">
+                            <td>
+                                <a href="{{ url('free-nav/menus/' ~ menu.id) }}">
+                                    <strong>{{ menu.name }}</strong>
+                                </a>
+                            </td>
+                            <td class="code">{{ menu.handle }}</td>
+                            <td>
+                                {% set nodeCount = craft.freenav.nodes(menu.handle).count() %}
+                                <a href="{{ url('free-nav/menus/' ~ menu.id ~ '/build') }}">
+                                    {{ '{count} nodes'|t('free-nav', { count: nodeCount }) }}
+                                </a>
+                            </td>
+                            <td class="thin">
+                                <a href="{{ url('free-nav/menus/' ~ menu.id ~ '/build') }}"
+                                   class="btn small"
+                                   title="{{ 'Build'|t('free-nav') }}">
+                                    {{ 'Build'|t('free-nav') }}
+                                </a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="zilch">
+            <p>{{ 'No menus exist yet.'|t('free-nav') }}</p>
+        </div>
+    {% endif %}
+{% endblock %}

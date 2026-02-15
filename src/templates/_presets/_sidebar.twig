@@ -1,0 +1,44 @@
+{#
+ # Sidebar Nav Preset
+ # Renders navigation suited for sidebar placement with collapsible sections.
+ #}
+{% set navId = options.id ?? 'freenav-' ~ menu.handle %}
+{% set navClass = options.class ?? 'freenav-sidebar' %}
+{% set activeClass = options.activeClass ?? 'active' %}
+{% set hasChildrenClass = options.hasChildrenClass ?? 'has-children' %}
+
+<nav id="{{ navId }}" class="{{ navClass }}" aria-label="{{ menu.name }}">
+    <ul class="freenav-sidebar-list">
+        {% nav node in nodes %}
+            {% set isActive = node.isActive() %}
+            {% set hasChildren = node.getChildren() | length > 0 %}
+            {% set liClasses = ['freenav-sidebar-item'] %}
+            {% if isActive %}{% set liClasses = liClasses | merge([activeClass]) %}{% endif %}
+            {% if hasChildren %}{% set liClasses = liClasses | merge([hasChildrenClass]) %}{% endif %}
+
+            <li class="{{ liClasses | join(' ') }}">
+                {% if node.getUrl() %}
+                    <a href="{{ node.getUrl() }}"
+                       class="freenav-sidebar-link{% if node.classes %} {{ node.classes }}{% endif %}"
+                       {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}
+                       {% if node.isCurrent() %}aria-current="page"{% endif %}>
+                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                        {{ node.title }}
+                        {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
+                    </a>
+                {% else %}
+                    <span class="freenav-sidebar-heading{% if node.classes %} {{ node.classes }}{% endif %}">
+                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                        {{ node.title }}
+                        {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
+                    </span>
+                {% endif %}
+                {% ifchildren %}
+                    <ul class="freenav-sidebar-sublist">
+                        {% children %}
+                    </ul>
+                {% endifchildren %}
+            </li>
+        {% endnav %}
+    </ul>
+</nav>

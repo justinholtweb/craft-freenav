@@ -1,0 +1,11 @@
+{% extends '_layouts/cp' %}
+
+{% set pluginName = 'FreeNav' %}
+{% set pluginUrl = url('free-nav') %}
+
+{% set subnav = {
+    menus: { label: 'Menus'|t('free-nav'), url: url('free-nav/menus') },
+    settings: currentUser.admin and craft.app.config.general.allowAdminChanges ? { label: 'Settings'|t('free-nav'), url: url('free-nav/settings') } : null,
+} | filter %}
+
+{% block sidebar %}{% endblock %}

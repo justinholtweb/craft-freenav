@@ -1,0 +1,124 @@
+{% extends 'free-nav/_layouts/base' %}
+
+{% set selectedSubnavItem = 'menus' %}
+
+{% set crumbs = [
+    { label: 'FreeNav', url: url('free-nav') },
+    { label: 'Menus'|t('free-nav'), url: url('free-nav/menus') },
+] %}
+
+{% block content %}
+    <form method="post" accept-charset="UTF-8">
+        {{ csrfInput() }}
+        {{ actionInput('free-nav/menus/save') }}
+        {{ redirectInput('free-nav/menus/{id}') }}
+
+        {% if not isNew %}
+            {{ hiddenInput('menuId', menu.id) }}
+        {% endif %}
+
+        <div id="fields">
+            {{ forms.textField({
+                first: true,
+                label: 'Name'|t('app'),
+                instructions: 'What this menu will be called in the CP.'|t('free-nav'),
+                id: 'name',
+                name: 'name',
+                value: menu.name,
+                errors: menu.getErrors('name'),
+                autofocus: true,
+                required: true,
+            }) }}
+
+            {{ forms.textField({
+                label: 'Handle'|t('app'),
+                instructions: 'How you'll refer to this menu in the templates.'|t('free-nav'),
+                id: 'handle',
+                name: 'handle',
+                class: 'code',
+                autocorrect: false,
+                autocapitalize: false,
+                value: menu.handle,
+                errors: menu.getErrors('handle'),
+                required: true,
+            }) }}
+
+            {{ forms.textareaField({
+                label: 'Instructions'|t('app'),
+                instructions: 'Helper text to guide the author.'|t('free-nav'),
+                id: 'instructions',
+                name: 'instructions',
+                value: menu.instructions,
+                errors: menu.getErrors('instructions'),
+            }) }}
+
+            <hr>
+
+            {{ forms.selectField({
+                label: 'Propagation Method'|t('free-nav'),
+                instructions: 'Which sites should nodes be saved to?'|t('free-nav'),
+                id: 'propagationMethod',
+                name: 'propagationMethod',
+                options: propagationOptions,
+                value: menu.propagationMethod,
+            }) }}
+
+            {{ forms.textField({
+                label: 'Max Levels'|t('free-nav'),
+                instructions: 'The maximum number of levels this menu can have.'|t('free-nav'),
+                id: 'maxLevels',
+                name: 'maxLevels',
+                value: menu.maxLevels,
+                type: 'number',
+                min: 1,
+                size: 3,
+            }) }}
+
+            {{ forms.textField({
+                label: 'Max Nodes'|t('free-nav'),
+                instructions: 'The maximum number of nodes allowed in this menu.'|t('free-nav'),
+                id: 'maxNodes',
+                name: 'maxNodes',
+                value: menu.maxNodes,
+                type: 'number',
+                min: 1,
+                size: 5,
+            }) }}
+
+            {{ forms.selectField({
+                label: 'Default Placement'|t('free-nav'),
+                instructions: 'Where should new nodes be placed by default?'|t('free-nav'),
+                id: 'defaultPlacement',
+                name: 'defaultPlacement',
+                options: [
+                    { label: 'Beginning'|t('free-nav'), value: 'beginning' },
+                    { label: 'End'|t('free-nav'), value: 'end' },
+                ],
+                value: menu.defaultPlacement,
+            }) }}
+
+            <hr>
+            <h2>{{ 'Sites'|t('app') }}</h2>
+
+            {% for site in sites %}
+                {% set siteEnabled = siteSettings[site.id].enabled ?? true %}
+                {{ forms.lightswitchField({
+                    label: site.name,
+                    id: 'sites-' ~ site.id ~ '-enabled',
+                    name: 'sites[' ~ site.id ~ '][enabled]',
+                    on: siteEnabled,
+                }) }}
+            {% endfor %}
+        </div>
+
+        <div class="buttons">
+            <button type="submit" class="btn submit">{{ 'Save'|t('app') }}</button>
+        </div>
+    </form>
+{% endblock %}
+
+{% js %}
+    {% if isNew %}
+        new Craft.HandleGenerator('#name', '#handle');
+    {% endif %}
+{% endjs %}
