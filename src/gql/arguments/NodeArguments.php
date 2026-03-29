@@ -2,17 +2,17 @@
 
 namespace justinholt\freenav\gql\arguments;
 
-use craft\gql\base\Arguments;
+use craft\gql\base\ElementArguments;
 use GraphQL\Type\Definition\Type;
 
-class NodeArguments extends Arguments
+class NodeArguments extends ElementArguments
 {
     public static function getArguments(): array
     {
         return array_merge(parent::getArguments(), [
             'menuHandle' => [
                 'name' => 'menuHandle',
-                'type' => Type::nonNull(Type::string()),
+                'type' => Type::string(),
                 'description' => 'The handle of the menu to query nodes from.',
             ],
             'nodeType' => [

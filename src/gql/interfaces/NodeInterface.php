@@ -6,6 +6,7 @@ use Craft;
 use craft\gql\base\InterfaceType as BaseInterfaceType;
 use craft\gql\GqlEntityRegistry;
 use craft\gql\TypeManager;
+use craft\helpers\Json;
 use GraphQL\Type\Definition\InterfaceType;
 use GraphQL\Type\Definition\Type;
 use justinholt\freenav\gql\types\CustomAttributeType;
@@ -90,6 +91,10 @@ class NodeInterface extends BaseInterfaceType
                     'name' => 'data',
                     'type' => Type::string(),
                     'description' => 'JSON data associated with the node.',
+                    'resolve' => function ($source) {
+                        $data = $source->getDataArray();
+                        return !empty($data) ? Json::encode($data) : null;
+                    },
                 ],
                 'active' => [
                     'name' => 'active',

@@ -14,7 +14,7 @@ return [
     'New menu' => 'New menu',
     'Create a new menu' => 'Create a new menu',
     'Menu saved.' => 'Menu saved.',
-    'Couldn't save menu.' => 'Couldn't save menu.',
+    'Couldn\'t save menu.' => 'Couldn\'t save menu.',
     'Menu deleted.' => 'Menu deleted.',
     'Menu duplicated.' => 'Menu duplicated.',
     'No menus exist yet.' => 'No menus exist yet.',
@@ -28,8 +28,8 @@ return [
     'Node added.' => 'Node added.',
     'Node saved.' => 'Node saved.',
     'Node deleted.' => 'Node deleted.',
-    'Couldn't add node.' => 'Couldn't add node.',
-    'Couldn't save node.' => 'Couldn't save node.',
+    'Couldn\'t add node.' => 'Couldn\'t add node.',
+    'Couldn\'t save node.' => 'Couldn\'t save node.',
     'Could not add node.' => 'Could not add node.',
     'Could not save node.' => 'Could not save node.',
     'Could not delete node.' => 'Could not delete node.',
@@ -70,7 +70,7 @@ return [
 
     // Menu settings
     'What this menu will be called in the CP.' => 'What this menu will be called in the CP.',
-    'How you'll refer to this menu in the templates.' => 'How you'll refer to this menu in the templates.',
+    'How you\'ll refer to this menu in the templates.' => 'How you\'ll refer to this menu in the templates.',
     'Helper text to guide the author.' => 'Helper text to guide the author.',
     'Propagation Method' => 'Propagation Method',
     'Which sites should nodes be saved to?' => 'Which sites should nodes be saved to?',
@@ -99,7 +99,7 @@ return [
     'Enable REST API' => 'Enable REST API',
     'Enable the built-in REST API endpoints.' => 'Enable the built-in REST API endpoints.',
     'Settings saved.' => 'Settings saved.',
-    'Couldn't save settings.' => 'Couldn't save settings.',
+    'Couldn\'t save settings.' => 'Couldn\'t save settings.',
 
     // Permissions
     'Manage menus' => 'Manage menus',
@@ -114,7 +114,7 @@ return [
     'Export JSON' => 'Export JSON',
     'No file uploaded.' => 'No file uploaded.',
     'Invalid import file format.' => 'Invalid import file format.',
-    'Couldn't create menu from import.' => 'Couldn't create menu from import.',
+    'Couldn\'t create menu from import.' => 'Couldn\'t create menu from import.',
     'Menu imported successfully.' => 'Menu imported successfully.',
 
     // REST API

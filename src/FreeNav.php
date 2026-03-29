@@ -13,6 +13,7 @@ use craft\events\ConfigEvent;
 use craft\events\DefineFieldLayoutFieldsEvent;
 use craft\events\ModelEvent;
 use craft\events\RegisterComponentTypesEvent;
+use craft\events\RegisterGqlQueriesEvent;
 use craft\events\RegisterGqlSchemaComponentsEvent;
 use craft\events\RegisterGqlTypesEvent;
 use craft\events\RegisterUrlRulesEvent;
@@ -30,6 +31,7 @@ use craft\web\UrlManager;
 use justinholt\freenav\elements\Node;
 use justinholt\freenav\fields\MenuField;
 use justinholt\freenav\gql\interfaces\NodeInterface;
+use justinholt\freenav\gql\queries\NodeQuery as GqlNodeQuery;
 use justinholt\freenav\models\Settings;
 use justinholt\freenav\services\Breadcrumbs;
 use justinholt\freenav\services\MenuCache;
@@ -320,13 +322,24 @@ class FreeNav extends Plugin
 
         Event::on(
             Gql::class,
+            Gql::EVENT_REGISTER_GQL_QUERIES,
+            function (RegisterGqlQueriesEvent $event) {
+                $event->queries = array_merge(
+                    $event->queries,
+                    GqlNodeQuery::getQueries()
+                );
+            }
+        );
+
+        Event::on(
+            Gql::class,
             Gql::EVENT_REGISTER_GQL_SCHEMA_COMPONENTS,
             function (RegisterGqlSchemaComponentsEvent $event) {
                 $menus = $this->getMenus()->getAllMenus();
 
                 $queries = [];
                 foreach ($menus as $menu) {
-                    $queries["freeNav.menus.{$menu->uid}:read"] = [
+                    $queries["freeNavMenus.{$menu->uid}:read"] = [
                         'label' => Craft::t('free-nav', 'View "{name}" menu nodes', ['name' => $menu->name]),
                     ];
                 }

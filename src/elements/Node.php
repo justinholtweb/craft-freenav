@@ -15,6 +15,7 @@ use justinholt\freenav\elements\db\NodeQuery;
 use justinholt\freenav\enums\NodeType as NodeTypeEnum;
 use justinholt\freenav\events\NodeActiveEvent;
 use justinholt\freenav\FreeNav;
+use justinholt\freenav\gql\interfaces\NodeInterface;
 use justinholt\freenav\models\Menu;
 use justinholt\freenav\models\VisibilityRule;
 use justinholt\freenav\records\NodeRecord;
@@ -92,6 +93,28 @@ class Node extends Element
     public static function hasContent(): bool
     {
         return true;
+    }
+
+    public function getGqlTypeName(): string
+    {
+        return $this->getMenu()->handle . '_FreeNavNode';
+    }
+
+    public static function gqlTypeNameByContext(mixed $context): string
+    {
+        /** @var Menu $context */
+        return $context->handle . '_FreeNavNode';
+    }
+
+    public static function gqlScopesByContext(mixed $context): array
+    {
+        /** @var Menu $context */
+        return ["freeNavMenus.{$context->uid}:read"];
+    }
+
+    public static function gqlInterfaceType(): string
+    {
+        return NodeInterface::class;
     }
 
     public static function find(): NodeQuery
@@ -437,6 +460,51 @@ class Node extends Element
         return $this->data ?? [];
     }
 
+    public function fields(): array
+    {
+        $fields = parent::fields();
+
+        // Decode JSON columns as arrays instead of raw strings
+        $fields['customAttributes'] = fn() => $this->getCustomAttributesArray();
+        $fields['data'] = fn() => $this->getDataArray();
+        $fields['visibilityRules'] = fn() => $this->getVisibilityRulesArray();
+
+        return $fields;
+    }
+
+    public function extraFields(): array
+    {
+        $fields = parent::extraFields();
+
+        return array_merge($fields, [
+            'active',
+            'target',
+            'menuHandle',
+            'menuName',
+            'nodeTypeName',
+        ]);
+    }
+
+    public function getActive(): bool
+    {
+        return $this->isActive();
+    }
+
+    public function getMenuHandle(): string
+    {
+        return $this->getMenu()->handle;
+    }
+
+    public function getMenuName(): string
+    {
+        return $this->getMenu()->name;
+    }
+
+    public function getNodeTypeName(): string
+    {
+        return $this->getNodeType()->label();
+    }
+
     public function getSupportedSites(): array
     {
         $menu = $this->getMenu();
@@ -529,12 +597,12 @@ class Node extends Element
         parent::afterDelete();
     }
 
-    public function canView(\craft\base\User $user): bool
+    public function canView(\craft\elements\User $user): bool
     {
         return true;
     }
 
-    public function canSave(\craft\base\User $user): bool
+    public function canSave(\craft\elements\User $user): bool
     {
         if ($this->menuId) {
             try {
@@ -548,7 +616,7 @@ class Node extends Element
         return $user->can('freeNav-editNodes');
     }
 
-    public function canDelete(\craft\base\User $user): bool
+    public function canDelete(\craft\elements\User $user): bool
     {
         if ($this->menuId) {
             try {

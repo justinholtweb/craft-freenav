@@ -117,7 +117,7 @@ class NodeQuery extends ElementQuery
      * @inheritdoc
      * @return Node[]
      */
-    protected function createElement(array $row): Node
+    public function createElement(array $row): Node
     {
         return new Node($row);
     }
