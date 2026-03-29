@@ -90,11 +90,6 @@ class Node extends Element
         return true;
     }
 
-    public static function hasContent(): bool
-    {
-        return true;
-    }
-
     public function getGqlTypeName(): string
     {
         return $this->getMenu()->handle . '_FreeNavNode';

@@ -10,6 +10,9 @@ class MenuSiteSettings extends Model
     public ?int $menuId = null;
     public ?int $siteId = null;
     public bool $enabled = true;
+    public mixed $dateCreated = null;
+    public mixed $dateUpdated = null;
+    public ?string $uid = null;
 
     public function defineRules(): array
     {

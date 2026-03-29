@@ -44,7 +44,7 @@ class NodesController extends Controller
         $nodes = FreeNav::getInstance()->getNodes()->addNodes($menu, [$nodeData]);
 
         if (empty($nodes)) {
-            return $this->asFailure(Craft::t('free-nav', 'Couldn't add node.'));
+            return $this->asFailure(Craft::t('free-nav', 'Couldn\'t add node.'));
         }
 
         $node = $nodes[0];
@@ -95,7 +95,7 @@ class NodesController extends Controller
         }
 
         if (!Craft::$app->getElements()->saveElement($node)) {
-            return $this->asFailure(Craft::t('free-nav', 'Couldn't save node.'));
+            return $this->asFailure(Craft::t('free-nav', 'Couldn\'t save node.'));
         }
 
         return $this->asJson([

@@ -6,6 +6,7 @@ use craft\elements\db\ElementQuery;
 use craft\helpers\Db;
 use justinholt\freenav\elements\Node;
 use justinholt\freenav\enums\NodeType;
+use justinholt\freenav\FreeNav;
 
 class NodeQuery extends ElementQuery
 {
@@ -79,6 +80,14 @@ class NodeQuery extends ElementQuery
 
         if ($this->menuId) {
             $this->subQuery->andWhere(Db::parseParam('freenav_nodes.menuId', $this->menuId));
+
+            // Set structureId so Craft joins structureelements for ordering
+            if (!$this->structureId && is_int($this->menuId)) {
+                $menu = FreeNav::getInstance()->getMenus()->getMenuById($this->menuId);
+                if ($menu?->structureId) {
+                    $this->structureId = $menu->structureId;
+                }
+            }
         }
 
         if ($this->menuHandle) {
@@ -87,6 +96,14 @@ class NodeQuery extends ElementQuery
                 '[[freenav_menus.id]] = [[freenav_nodes.menuId]]'
             );
             $this->subQuery->andWhere(Db::parseParam('freenav_menus.handle', $this->menuHandle));
+
+            // Set structureId so Craft joins structureelements for ordering
+            if (!$this->structureId && is_string($this->menuHandle)) {
+                $menu = FreeNav::getInstance()->getMenus()->getMenuByHandle($this->menuHandle);
+                if ($menu?->structureId) {
+                    $this->structureId = $menu->structureId;
+                }
+            }
         }
 
         if ($this->nodeType) {

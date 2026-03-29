@@ -117,7 +117,7 @@ class MenusController extends Controller
         $menu->setSiteSettings($siteSettings);
 
         if (!FreeNav::getInstance()->getMenus()->saveMenu($menu)) {
-            Craft::$app->getSession()->setError(Craft::t('free-nav', 'Couldn't save menu.'));
+            Craft::$app->getSession()->setError(Craft::t('free-nav', 'Couldn\'t save menu.'));
 
             Craft::$app->getUrlManager()->setRouteParams([
                 'menu' => $menu,
@@ -226,7 +226,7 @@ class MenusController extends Controller
         $settings->restApiEnabled = (bool)$request->getBodyParam('restApiEnabled', $settings->restApiEnabled);
 
         if (!Craft::$app->getPlugins()->savePluginSettings(FreeNav::getInstance(), $settings->toArray())) {
-            Craft::$app->getSession()->setError(Craft::t('free-nav', 'Couldn't save settings.'));
+            Craft::$app->getSession()->setError(Craft::t('free-nav', 'Couldn\'t save settings.'));
             return null;
         }
 

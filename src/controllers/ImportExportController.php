@@ -98,7 +98,7 @@ class ImportExportController extends Controller
         $menu->setSiteSettings($siteSettings);
 
         if (!FreeNav::getInstance()->getMenus()->saveMenu($menu)) {
-            Craft::$app->getSession()->setError(Craft::t('free-nav', 'Couldn't create menu from import.'));
+            Craft::$app->getSession()->setError(Craft::t('free-nav', 'Couldn\'t create menu from import.'));
             return null;
         }
 

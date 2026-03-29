@@ -5,6 +5,7 @@ namespace justinholt\freenav\models;
 use Craft;
 use craft\base\Model;
 use craft\models\FieldLayout;
+use DateTime;
 use justinholt\freenav\elements\Node;
 use justinholt\freenav\enums\Propagation;
 use justinholt\freenav\FreeNav;
@@ -23,9 +24,9 @@ class Menu extends Model
     public string $defaultPlacement = 'end';
     public ?string $permissions = null;
     public int $sortOrder = 0;
-    public ?string $dateDeleted = null;
-    public ?string $dateCreated = null;
-    public ?string $dateUpdated = null;
+    public DateTime|string|null $dateDeleted = null;
+    public DateTime|string|null $dateCreated = null;
+    public DateTime|string|null $dateUpdated = null;
     public ?string $uid = null;
 
     /** @var MenuSiteSettings[] */

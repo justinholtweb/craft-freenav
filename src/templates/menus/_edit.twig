@@ -1,4 +1,5 @@
 {% extends 'free-nav/_layouts/base' %}
+{% import '_includes/forms' as forms %}
 
 {% set selectedSubnavItem = 'menus' %}
 
@@ -32,7 +33,7 @@
 
             {{ forms.textField({
                 label: 'Handle'|t('app'),
-                instructions: 'How you'll refer to this menu in the templates.'|t('free-nav'),
+                instructions: 'How you\'ll refer to this menu in the templates.'|t('free-nav'),
                 id: 'handle',
                 name: 'handle',
                 class: 'code',
