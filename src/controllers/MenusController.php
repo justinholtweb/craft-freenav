@@ -162,11 +162,25 @@ class MenusController extends Controller
         $nodeTypes = FreeNav::getInstance()->getNodeTypes()->getTypeOptions();
         $parentOptions = FreeNav::getInstance()->getNodes()->getParentOptions($menu);
 
+        // Build parent map from structure order: nodeId => parentId
+        $parentMap = [];
+        $stack = []; // stack of [id, level]
+        foreach ($nodes as $node) {
+            while (!empty($stack) && $stack[count($stack) - 1][1] >= $node->level) {
+                array_pop($stack);
+            }
+            if (!empty($stack)) {
+                $parentMap[$node->id] = $stack[count($stack) - 1][0];
+            }
+            $stack[] = [$node->id, $node->level];
+        }
+
         return $this->renderTemplate('free-nav/menus/_build', [
             'menu' => $menu,
             'nodes' => $nodes,
             'nodeTypes' => $nodeTypes,
             'parentOptions' => $parentOptions,
+            'parentMap' => $parentMap,
             'title' => $menu->name,
         ]);
     }

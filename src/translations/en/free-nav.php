@@ -117,6 +117,18 @@ return [
     'Couldn\'t create menu from import.' => 'Couldn\'t create menu from import.',
     'Menu imported successfully.' => 'Menu imported successfully.',
 
+    // Migration
+    'Migration' => 'Migration',
+    'Migrate from Verbb Navigation' => 'Migrate from Verbb Navigation',
+    'Import all navigations and nodes from the Verbb Navigation plugin. Existing menus with matching handles will be skipped. The Navigation plugin must still be installed.' => 'Import all navigations and nodes from the Verbb Navigation plugin. Existing menus with matching handles will be skipped. The Navigation plugin must still be installed.',
+    'Migrate from Navigation' => 'Migrate from Navigation',
+    'Import from JSON' => 'Import from JSON',
+    'Import a menu from a FreeNav JSON export file.' => 'Import a menu from a FreeNav JSON export file.',
+    'Verbb Navigation tables not found.' => 'Verbb Navigation tables not found.',
+    'No navigations found to migrate.' => 'No navigations found to migrate.',
+    '{count} navigation(s) migrated.' => '{count} navigation(s) migrated.',
+    '{count} skipped (handle already exists).' => '{count} skipped (handle already exists).',
+
     // REST API
     'REST API is disabled.' => 'REST API is disabled.',
 

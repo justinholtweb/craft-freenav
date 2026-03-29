@@ -26,7 +26,7 @@
             this._bindAddNode();
             this._bindEditNodes();
             this._bindDeleteNodes();
-            this._bindToggleNodes();
+            this._bindCollapse();
             this._bindDragDrop();
             this._bindPanels();
         },
@@ -94,13 +94,33 @@
             });
         },
 
-        _bindToggleNodes: function() {
-            document.querySelectorAll('.freenav-node-toggle').forEach(btn => {
+        _bindCollapse: function() {
+            document.querySelectorAll('.freenav-node-collapse').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    const enabled = btn.dataset.enabled === '1';
-                    this._toggleNode(btn.dataset.nodeId, !enabled, btn);
+                    const parentNode = btn.closest('.freenav-node');
+                    this._toggleCollapse(parentNode);
                 });
             });
+        },
+
+        _toggleCollapse: function(parentNode) {
+            const isCollapsed = parentNode.classList.toggle('is-collapsed');
+            const parentLevel = parseInt(parentNode.dataset.level);
+
+            // Find all following siblings that are children (level > parentLevel)
+            let sibling = parentNode.nextElementSibling;
+            while (sibling && sibling.classList.contains('freenav-node')) {
+                const siblingLevel = parseInt(sibling.dataset.level);
+                if (siblingLevel <= parentLevel) break;
+
+                if (isCollapsed) {
+                    sibling.classList.add('is-collapsed-child');
+                } else {
+                    // Only show if not hidden by another collapsed ancestor
+                    sibling.classList.remove('is-collapsed-child');
+                }
+                sibling = sibling.nextElementSibling;
+            }
         },
 
         _bindDragDrop: function() {
@@ -118,27 +138,47 @@
         },
 
         _startDrag: function(node, startEvent) {
-            const nodes = document.querySelectorAll('.freenav-node');
             let targetNode = null;
+            let dropPosition = null; // 'before' or 'after'
 
             node.classList.add('is-dragging');
 
-            const onMouseMove = (e) => {
-                nodes.forEach(n => {
-                    n.classList.remove('drag-over', 'drag-over-child');
-                });
+            // Create drop indicator line
+            let indicator = document.getElementById('freenav-drop-indicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.id = 'freenav-drop-indicator';
+                document.body.appendChild(indicator);
+            }
+            indicator.style.display = 'none';
 
+            const onMouseMove = (e) => {
                 const hoveredNode = this._getNodeAtPosition(e.clientY);
+
                 if (hoveredNode && hoveredNode !== node) {
                     const rect = hoveredNode.getBoundingClientRect();
                     const midY = rect.top + rect.height / 2;
+                    const nodesContainer = document.querySelector('.freenav-nodes');
+                    const containerRect = nodesContainer.getBoundingClientRect();
 
                     if (e.clientY < midY) {
-                        hoveredNode.classList.add('drag-over');
+                        dropPosition = 'before';
+                        indicator.style.display = 'block';
+                        indicator.style.top = (rect.top - 1) + 'px';
+                        indicator.style.left = containerRect.left + 'px';
+                        indicator.style.width = containerRect.width + 'px';
                     } else {
-                        hoveredNode.classList.add('drag-over');
+                        dropPosition = 'after';
+                        indicator.style.display = 'block';
+                        indicator.style.top = (rect.bottom - 1) + 'px';
+                        indicator.style.left = containerRect.left + 'px';
+                        indicator.style.width = containerRect.width + 'px';
                     }
                     targetNode = hoveredNode;
+                } else {
+                    targetNode = null;
+                    dropPosition = null;
+                    indicator.style.display = 'none';
                 }
             };
 
@@ -147,15 +187,24 @@
                 document.removeEventListener('mouseup', onMouseUp);
 
                 node.classList.remove('is-dragging');
-                document.querySelectorAll('.freenav-node').forEach(n => {
-                    n.classList.remove('drag-over', 'drag-over-child');
-                });
+                indicator.style.display = 'none';
 
-                if (targetNode && targetNode !== node) {
+                if (targetNode && targetNode !== node && dropPosition) {
+                    let prevId = null;
+
+                    if (dropPosition === 'after') {
+                        prevId = targetNode.dataset.nodeId;
+                    } else {
+                        const prev = targetNode.previousElementSibling;
+                        if (prev && prev.classList.contains('freenav-node')) {
+                            prevId = prev.dataset.nodeId;
+                        }
+                    }
+
                     this._moveNode(
                         node.dataset.nodeId,
                         null,
-                        targetNode.dataset.nodeId
+                        prevId
                     );
                 }
             };
@@ -283,26 +332,63 @@
         },
 
         _loadEditNode: function(nodeId) {
-            // For now, just populate from the DOM and show the panel
-            const nodeEl = document.querySelector(`.freenav-node[data-node-id="${nodeId}"]`);
-            if (!nodeEl) return;
+            // Fetch node data and parent options in parallel
+            Promise.all([
+                Craft.sendActionRequest('GET', 'free-nav/nodes/get-node', {
+                    params: { nodeId: nodeId },
+                }),
+                Craft.sendActionRequest('POST', 'free-nav/nodes/get-parent-options', {
+                    data: { menuId: this.menuId, excludeNodeId: nodeId },
+                }),
+            ])
+                .then(([nodeResponse, parentResponse]) => {
+                    const node = nodeResponse.data;
 
-            const title = nodeEl.querySelector('.freenav-node-title')?.textContent?.trim() || '';
+                    document.getElementById('freenav-edit-node-id').value = node.id;
+                    document.getElementById('freenav-edit-title').value = node.title || '';
+                    document.getElementById('freenav-edit-url').value = node.url || '';
+                    document.getElementById('freenav-edit-classes').value = node.classes || '';
+                    document.getElementById('freenav-edit-url-suffix').value = node.urlSuffix || '';
+                    document.getElementById('freenav-edit-icon').value = node.icon || '';
+                    document.getElementById('freenav-edit-badge').value = node.badge || '';
 
-            document.getElementById('freenav-edit-node-id').value = nodeId;
-            document.getElementById('freenav-edit-title').value = title;
-            document.getElementById('freenav-edit-url').value = '';
-            document.getElementById('freenav-edit-classes').value = '';
-            document.getElementById('freenav-edit-url-suffix').value = '';
-            document.getElementById('freenav-edit-icon').value = '';
-            document.getElementById('freenav-edit-badge').value = '';
+                    // Populate parent select using safe DOM methods
+                    const parentSelect = document.getElementById('freenav-edit-parent');
+                    while (parentSelect.firstChild) {
+                        parentSelect.removeChild(parentSelect.firstChild);
+                    }
+                    (parentResponse.data.options || []).forEach(opt => {
+                        const option = document.createElement('option');
+                        option.value = opt.value;
+                        option.textContent = opt.label;
+                        if (String(opt.value) === String(node.parentId || '')) {
+                            option.selected = true;
+                        }
+                        parentSelect.appendChild(option);
+                    });
 
-            this._showPanel('freenav-edit-panel');
+                    // Set new window lightswitch
+                    const newWindowSwitch = document.getElementById('freenav-edit-newwindow');
+                    if (newWindowSwitch) {
+                        const isOn = !!node.newWindow;
+                        const $ls = $(newWindowSwitch);
+                        if ($ls.data('lightswitch')) {
+                            $ls.data('lightswitch').turnOn(isOn);
+                        }
+                    }
+
+                    this._showPanel('freenav-edit-panel');
+                })
+                .catch(error => {
+                    Craft.cp.displayError(Craft.t('free-nav', 'Could not load node.'));
+                });
         },
 
         _submitEditNode: function() {
             const nodeId = document.getElementById('freenav-edit-node-id')?.value;
             if (!nodeId) return;
+
+            const newParentId = document.getElementById('freenav-edit-parent')?.value || null;
 
             const data = {
                 nodeId: nodeId,
@@ -314,8 +400,24 @@
                 badge: document.getElementById('freenav-edit-badge')?.value || null,
             };
 
+            // Save node fields first, then move if parent changed
             Craft.sendActionRequest('POST', 'free-nav/nodes/save', { data })
                 .then(response => {
+                    // Check if parent changed by comparing with original
+                    const nodeEl = document.querySelector(`.freenav-node[data-node-id="${nodeId}"]`);
+                    const currentParentId = nodeEl?.dataset?.parentId || null;
+
+                    if (newParentId !== currentParentId) {
+                        return Craft.sendActionRequest('POST', 'free-nav/nodes/move-node', {
+                            data: {
+                                nodeId: nodeId,
+                                parentId: newParentId,
+                                prevId: null,
+                            },
+                        });
+                    }
+                })
+                .then(() => {
                     Craft.cp.displayNotice(Craft.t('free-nav', 'Node saved.'));
                     this._hidePanel('freenav-edit-panel');
                     window.location.reload();

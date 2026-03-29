@@ -112,6 +112,10 @@ class FreeNav extends Plugin
         $this->_registerElementEventListeners();
         $this->_registerGarbageCollection();
 
+        if (Craft::$app->getRequest()->getIsConsoleRequest()) {
+            $this->controllerMap['migrate'] = \justinholt\freenav\console\controllers\MigrateController::class;
+        }
+
         if (Craft::$app->getRequest()->getIsCpRequest()) {
             $this->_registerCpUrlRules();
         }

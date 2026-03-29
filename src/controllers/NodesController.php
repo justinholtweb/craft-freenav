@@ -127,6 +127,53 @@ class NodesController extends Controller
         return $this->asSuccess(Craft::t('free-nav', 'Node deleted.'));
     }
 
+    public function actionGetNode(): Response
+    {
+        $this->requireAcceptsJson();
+
+        $nodeId = Craft::$app->getRequest()->getRequiredParam('nodeId');
+
+        $node = Node::find()->id($nodeId)->status(null)->one();
+
+        if (!$node) {
+            throw new NotFoundHttpException('Node not found');
+        }
+
+        // Get parent from structure via DB query
+        $parentId = null;
+        $menu = $node->getMenu();
+        if ($menu->structureId) {
+            $parentId = (new \craft\db\Query())
+                ->select(['parent.elementId'])
+                ->from(['child' => '{{%structureelements}}'])
+                ->innerJoin(['parent' => '{{%structureelements}}'], [
+                    'and',
+                    '[[parent.structureId]] = [[child.structureId]]',
+                    '[[parent.lft]] < [[child.lft]]',
+                    '[[parent.rgt]] > [[child.rgt]]',
+                    '[[parent.level]] = [[child.level]] - 1',
+                ])
+                ->where([
+                    'child.structureId' => $menu->structureId,
+                    'child.elementId' => $node->id,
+                ])
+                ->scalar() ?: null;
+        }
+
+        return $this->asJson([
+            'id' => $node->id,
+            'title' => $node->title,
+            'nodeType' => $node->nodeType,
+            'url' => $node->url,
+            'classes' => $node->classes,
+            'urlSuffix' => $node->urlSuffix,
+            'newWindow' => $node->newWindow,
+            'icon' => $node->icon,
+            'badge' => $node->badge,
+            'parentId' => $parentId,
+        ]);
+    }
+
     public function actionGetParentOptions(): Response
     {
         $this->requirePostRequest();

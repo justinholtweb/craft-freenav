@@ -9,6 +9,30 @@
     background: var(--white);
 }
 
+/* Header row */
+.freenav-nodes-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--gray-200);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.freenav-header-node {
+    flex: 1;
+}
+
+.freenav-header-type {
+    flex-shrink: 0;
+    width: 100px;
+    text-align: right;
+}
+
+/* Node rows */
 .freenav-node {
     border-bottom: 1px solid var(--gray-100);
 }
@@ -20,9 +44,9 @@
 .freenav-node-row {
     display: flex;
     align-items: center;
-    padding: 10px 14px;
-    padding-left: calc(14px + (var(--node-level, 1) - 1) * 24px);
-    gap: 10px;
+    padding: 8px 14px;
+    padding-left: calc(14px + (var(--node-level, 1) - 1) * 28px);
+    gap: 6px;
     transition: background-color 0.15s ease;
 }
 
@@ -30,52 +54,106 @@
     background-color: var(--gray-050);
 }
 
+.freenav-node-row:hover .freenav-node-actions {
+    opacity: 1;
+}
+
+/* Collapse toggle */
+.freenav-node-collapse {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.freenav-collapse-icon {
+    display: block;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid var(--gray-400);
+    transition: transform 0.2s ease;
+}
+
+.freenav-node-collapse:hover .freenav-collapse-icon {
+    border-top-color: var(--gray-600);
+}
+
+.freenav-node.is-collapsed > .freenav-node-row .freenav-collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.freenav-node-collapse-spacer {
+    width: 20px;
+    flex-shrink: 0;
+}
+
+/* Drag handle */
 .freenav-node-drag {
     cursor: grab;
     color: var(--gray-300);
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
 }
 
 .freenav-node-drag:active {
     cursor: grabbing;
 }
 
+/* Status dot */
+.freenav-node-status {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 2px solid var(--enabled-color, #27AB83);
+    background: transparent;
+}
+
+.freenav-node-status.enabled {
+    background: var(--enabled-color, #27AB83);
+}
+
+/* Title */
+.freenav-node-title {
+    font-weight: 600;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Type badge */
 .freenav-node-type {
     display: inline-block;
     padding: 2px 8px;
     border-radius: 3px;
     color: var(--white);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 10px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.025em;
+    letter-spacing: 0.05em;
     flex-shrink: 0;
-    line-height: 1.4;
-}
-
-.freenav-node-title {
-    font-weight: 600;
-    flex-shrink: 0;
-}
-
-.freenav-node-url {
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.5;
     white-space: nowrap;
-    flex: 1;
-    min-width: 0;
-    font-size: 12px;
 }
 
+/* Actions (visible on hover) */
 .freenav-node-actions {
     display: flex;
     gap: 4px;
     flex-shrink: 0;
-    margin-left: auto;
-}
-
-.freenav-node-toggle.inactive {
-    opacity: 0.5;
+    opacity: 0;
+    transition: opacity 0.15s ease;
 }
 
 /* Drag and Drop States */
@@ -83,12 +161,18 @@
     opacity: 0.4;
 }
 
-.freenav-node.drag-over {
-    border-top: 2px solid var(--blue-500);
+/* Hidden children when collapsed */
+.freenav-node.is-collapsed-child {
+    display: none;
 }
 
-.freenav-node.drag-over-child {
-    background-color: var(--blue-050);
+#freenav-drop-indicator {
+    position: fixed;
+    height: 2px;
+    background: var(--blue-500);
+    pointer-events: none;
+    z-index: 100;
+    display: none;
 }
 
 /* Add/Edit Panels */

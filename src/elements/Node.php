@@ -40,6 +40,19 @@ class Node extends Element
     public ?string $badge = null;
     public array|string|null $visibilityRules = null;
     public ?bool $deletedWithMenu = null;
+    public mixed $content = null;
+
+    public function __construct($config = [])
+    {
+        // Filter out properties not defined on this class to avoid UnknownPropertyException
+        if (is_array($config)) {
+            $config = array_filter($config, function ($key) {
+                return property_exists($this, $key) || method_exists($this, 'set' . ucfirst($key));
+            }, ARRAY_FILTER_USE_KEY);
+        }
+
+        parent::__construct($config);
+    }
 
     private ?Element $_linkedElement = null;
     private ?bool $_linkedElementLoaded = false;

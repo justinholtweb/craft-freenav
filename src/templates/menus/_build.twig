@@ -44,43 +44,47 @@
 
         {% if nodes | length %}
             <div class="freenav-nodes">
+                <div class="freenav-nodes-header">
+                    <span class="freenav-header-node">{{ 'Node'|t('free-nav') }}</span>
+                    <span class="freenav-header-type">{{ 'Type'|t('free-nav') }}</span>
+                </div>
                 {% for node in nodes %}
+                    {% set hasChildren = nodes[loop.index0 + 1] is defined and nodes[loop.index0 + 1].level > node.level %}
                     <div class="freenav-node"
                          data-node-id="{{ node.id }}"
+                         data-parent-id="{{ parentMap[node.id] ?? '' }}"
                          data-level="{{ node.level }}"
                          data-type="{{ node.nodeType }}"
+                         data-has-children="{{ hasChildren ? '1' : '0' }}"
                          style="--node-level: {{ node.level }}">
                         <div class="freenav-node-row">
+                            {% if hasChildren %}
+                                <button class="freenav-node-collapse" type="button" title="{{ 'Toggle children'|t('free-nav') }}">
+                                    <span class="freenav-collapse-icon"></span>
+                                </button>
+                            {% else %}
+                                <span class="freenav-node-collapse-spacer"></span>
+                            {% endif %}
+
                             <span class="freenav-node-drag" title="{{ 'Drag to reorder'|t('free-nav') }}">
                                 <span data-icon="move"></span>
                             </span>
 
-                            <span class="freenav-node-type" style="background-color: {{ node.getNodeType().color() }}">
-                                {{ node.getNodeType().label() }}
-                            </span>
+                            <span class="freenav-node-status{% if node.enabled %} enabled{% endif %}" title="{{ node.enabled ? 'Enabled'|t('free-nav') : 'Disabled'|t('free-nav') }}"></span>
 
                             <span class="freenav-node-title">
                                 {{ node.title }}
                             </span>
 
-                            {% if node.url %}
-                                <span class="freenav-node-url code light">
-                                    {{ node.getUrl() }}
-                                </span>
-                            {% endif %}
+                            <span class="freenav-node-type" style="background-color: {{ node.getNodeType().color() }}">
+                                {{ node.getNodeType().label()|upper }}
+                            </span>
 
                             <span class="freenav-node-actions">
                                 <button class="freenav-node-edit btn small"
                                         data-node-id="{{ node.id }}"
                                         type="button">
                                     {{ 'Edit'|t('app') }}
-                                </button>
-                                <button class="freenav-node-toggle btn small{% if not node.enabled %} inactive{% endif %}"
-                                        data-node-id="{{ node.id }}"
-                                        data-enabled="{{ node.enabled ? '1' : '0' }}"
-                                        type="button"
-                                        title="{{ node.enabled ? 'Disable'|t('free-nav') : 'Enable'|t('free-nav') }}">
-                                    {{ node.enabled ? 'On' : 'Off' }}
                                 </button>
                                 <button class="freenav-node-delete btn small"
                                         data-node-id="{{ node.id }}"
@@ -237,6 +241,19 @@
                     <input type="text" id="freenav-edit-url" class="text fullwidth">
                 </div>
             </div>
+
+            <div class="field">
+                <div class="heading">
+                    <label for="freenav-edit-parent">{{ 'Parent'|t('app') }}</label>
+                </div>
+                <div class="input">
+                    <select id="freenav-edit-parent" class="fullwidth">
+                        <option value="">—</option>
+                    </select>
+                </div>
+            </div>
+
+            <hr>
 
             <div class="field">
                 <div class="heading">

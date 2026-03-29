@@ -91,4 +91,38 @@
             <button type="submit" class="btn submit">{{ 'Save'|t('app') }}</button>
         </div>
     </form>
+
+    <hr>
+    <h2>{{ 'Migration'|t('free-nav') }}</h2>
+
+    <div class="field">
+        <div class="heading">
+            <label>{{ 'Migrate from Verbb Navigation'|t('free-nav') }}</label>
+        </div>
+        <div class="instructions">
+            <p>{{ 'Import all navigations and nodes from the Verbb Navigation plugin. Existing menus with matching handles will be skipped. The Navigation plugin must still be installed.'|t('free-nav') }}</p>
+        </div>
+        <form method="post" accept-charset="UTF-8">
+            {{ csrfInput() }}
+            {{ actionInput('free-nav/import-export/migrate-from-navigation') }}
+            <button type="submit" class="btn">{{ 'Migrate from Navigation'|t('free-nav') }}</button>
+        </form>
+    </div>
+
+    <div class="field" style="margin-top: 24px;">
+        <div class="heading">
+            <label>{{ 'Import from JSON'|t('free-nav') }}</label>
+        </div>
+        <div class="instructions">
+            <p>{{ 'Import a menu from a FreeNav JSON export file.'|t('free-nav') }}</p>
+        </div>
+        <form method="post" accept-charset="UTF-8" enctype="multipart/form-data">
+            {{ csrfInput() }}
+            {{ actionInput('free-nav/import-export/import') }}
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="file" name="importFile" accept=".json">
+                <button type="submit" class="btn">{{ 'Import'|t('free-nav') }}</button>
+            </div>
+        </form>
+    </div>
 {% endblock %}
