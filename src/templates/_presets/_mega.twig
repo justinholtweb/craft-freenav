@@ -36,15 +36,6 @@
                             {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
                         </button>
                     {% endif %}
-
-                    {% ifchildren %}
-                        <div class="freenav-mega-panel" role="menu">
-                            <div class="freenav-mega-columns">
-                                {% children %}
-                            </div>
-                        </div>
-                    {% endifchildren %}
-                </li>
             {% elseif node.level == 2 %}
                 <div class="freenav-mega-column">
                     {% if node.getUrl() %}
@@ -60,12 +51,6 @@
                             {{ node.title }}
                         </span>
                     {% endif %}
-                    {% ifchildren %}
-                        <ul class="freenav-mega-list">
-                            {% children %}
-                        </ul>
-                    {% endifchildren %}
-                </div>
             {% else %}
                 <li class="freenav-mega-link-item" role="none">
                     {% if node.getUrl() %}
@@ -85,6 +70,16 @@
                         </span>
                     {% endif %}
                 </li>
+            {% endif %}
+            {% ifchildren %}
+                <div class="freenav-mega-children freenav-mega-children--level-{{ node.level }}">
+                    {% children %}
+                </div>
+            {% endifchildren %}
+            {% if node.level == 1 %}
+                </li>
+            {% elseif node.level == 2 %}
+                </div>
             {% endif %}
         {% endnav %}
     </ul>

@@ -23,12 +23,6 @@
                             {{ node.title }}
                         </span>
                     {% endif %}
-                    {% ifchildren %}
-                        <ul class="freenav-footer-list">
-                            {% children %}
-                        </ul>
-                    {% endifchildren %}
-                </div>
             {% else %}
                 <li class="freenav-footer-item">
                     {% if node.getUrl() %}
@@ -47,6 +41,14 @@
                         </span>
                     {% endif %}
                 </li>
+            {% endif %}
+            {% ifchildren %}
+                <ul class="freenav-footer-list">
+                    {% children %}
+                </ul>
+            {% endifchildren %}
+            {% if node.level == 1 %}
+                </div>
             {% endif %}
         {% endnav %}
     </div>
