@@ -139,7 +139,7 @@ class ImportExportController extends Controller
                 $element = $node->getLinkedElement();
                 if ($element) {
                     $nodeData['linkedElementUid'] = $element->uid;
-                    $nodeData['linkedElementType'] = get_class($element);
+                    $nodeData['linkedElementType'] = $element::class;
                 }
             }
 

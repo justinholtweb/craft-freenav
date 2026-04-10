@@ -147,7 +147,7 @@ class Nodes extends Component
                     $element = Craft::$app->getElements()->getElementById(
                         $node->linkedElementId,
                         $nodeTypeEnum->elementType(),
-                        $node->siteId
+                        $node->siteId,
                     );
                     if ($element) {
                         $node->title = $element->title ?? '';

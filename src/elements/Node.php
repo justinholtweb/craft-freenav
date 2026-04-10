@@ -7,6 +7,7 @@ use craft\base\Element;
 use craft\elements\actions\Delete;
 use craft\elements\actions\SetStatus;
 use craft\elements\db\ElementQueryInterface;
+use craft\helpers\App;
 use craft\helpers\Html;
 use craft\helpers\Json;
 use craft\helpers\Template;
@@ -130,7 +131,7 @@ class Node extends Element
         return new NodeQuery(static::class);
     }
 
-    public static function defineSources(string $context = null): array
+    public static function defineSources(?string $context = null): array
     {
         $sources = [];
         $menus = FreeNav::getInstance()->getMenus()->getAllMenus();
@@ -165,7 +166,7 @@ class Node extends Element
         return ['title', 'nodeType', 'url'];
     }
 
-    protected static function defineActions(string $source = null): array
+    protected static function defineActions(?string $source = null): array
     {
         return [
             Delete::class,
@@ -245,7 +246,7 @@ class Node extends Element
         $this->_linkedElement = Craft::$app->getElements()->getElementById(
             $this->linkedElementId,
             $elementType,
-            $this->siteId
+            $this->siteId,
         );
 
         return $this->_linkedElement;
@@ -657,7 +658,7 @@ class Node extends Element
 
         // Handle environment variables
         if (str_starts_with($url, '$')) {
-            $url = Craft::parseEnv($url);
+            $url = App::parseEnv($url);
         }
 
         // Handle aliases

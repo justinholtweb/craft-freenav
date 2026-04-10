@@ -60,7 +60,7 @@ class Renderer extends Component
                 $siteId,
                 $cacheKey,
                 $html,
-                $options['cacheDuration']
+                $options['cacheDuration'],
             );
         }
 

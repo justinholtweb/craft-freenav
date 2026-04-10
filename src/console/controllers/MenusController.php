@@ -30,7 +30,7 @@ class MenusController extends Controller
                 "  %-30s %-20s %d nodes\n",
                 $menu->name,
                 $menu->handle,
-                $nodeCount
+                $nodeCount,
             ));
         }
 

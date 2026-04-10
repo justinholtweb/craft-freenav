@@ -258,7 +258,7 @@ class FreeNav extends Plugin
                 Craft::$app->getGc()->deletePartialElements(
                     Node::class,
                     '{{%freenav_nodes}}',
-                    'id'
+                    'id',
                 );
             }
         );
