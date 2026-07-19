@@ -2,7 +2,6 @@
 
 namespace justinholt\freenav\gql\types\generators;
 
-use Craft;
 use craft\gql\base\GeneratorInterface;
 use craft\gql\GqlEntityRegistry;
 use justinholt\freenav\FreeNav;
@@ -24,7 +23,7 @@ class NodeGenerator implements GeneratorInterface
             $type = GqlEntityRegistry::getEntity($typeName)
                 ?: GqlEntityRegistry::createEntity($typeName, new NodeType([
                     'name' => $typeName,
-                    'fields' => function () use ($fields) {
+                    'fields' => function() use ($fields) {
                         return $fields;
                     },
                 ]));

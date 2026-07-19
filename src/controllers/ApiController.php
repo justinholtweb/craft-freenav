@@ -84,6 +84,9 @@ class ApiController extends Controller
 
     private function _serializeNode(Node $node): array
     {
+        /** @var Node[] $childNodes */
+        $childNodes = $node->getChildren()->all();
+
         return [
             'id' => $node->id,
             'title' => $node->title,
@@ -99,8 +102,8 @@ class ApiController extends Controller
             'active' => $node->isActive(),
             'enabled' => $node->enabled,
             'children' => array_map(
-                fn($child) => $this->_serializeNode($child),
-                $node->getChildren()->all()
+                fn(Node $child) => $this->_serializeNode($child),
+                $childNodes
             ),
         ];
     }

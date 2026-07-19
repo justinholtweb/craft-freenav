@@ -2,7 +2,6 @@
 
 namespace justinholt\freenav\gql\interfaces;
 
-use Craft;
 use craft\gql\base\InterfaceType as BaseInterfaceType;
 use craft\gql\GqlEntityRegistry;
 use craft\gql\TypeManager;
@@ -91,7 +90,7 @@ class NodeInterface extends BaseInterfaceType
                     'name' => 'data',
                     'type' => Type::string(),
                     'description' => 'JSON data associated with the node.',
-                    'resolve' => function ($source) {
+                    'resolve' => function($source) {
                         $data = $source->getDataArray();
                         return !empty($data) ? Json::encode($data) : null;
                     },
@@ -100,7 +99,7 @@ class NodeInterface extends BaseInterfaceType
                     'name' => 'active',
                     'type' => Type::boolean(),
                     'description' => 'Whether the node is currently active.',
-                    'resolve' => function ($source) {
+                    'resolve' => function($source) {
                         return $source->isActive();
                     },
                 ],
@@ -108,7 +107,7 @@ class NodeInterface extends BaseInterfaceType
                     'name' => 'menuHandle',
                     'type' => Type::string(),
                     'description' => 'The handle of the menu this node belongs to.',
-                    'resolve' => function ($source) {
+                    'resolve' => function($source) {
                         return $source->getMenu()->handle;
                     },
                 ],
@@ -116,7 +115,7 @@ class NodeInterface extends BaseInterfaceType
                     'name' => 'menuName',
                     'type' => Type::string(),
                     'description' => 'The name of the menu this node belongs to.',
-                    'resolve' => function ($source) {
+                    'resolve' => function($source) {
                         return $source->getMenu()->name;
                     },
                 ],
@@ -136,7 +135,7 @@ class NodeInterface extends BaseInterfaceType
                             'description' => 'Filter children by level.',
                         ],
                     ],
-                    'resolve' => function ($source, array $arguments) {
+                    'resolve' => function($source, array $arguments) {
                         $query = $source->getChildren();
 
                         if (isset($arguments['limit'])) {

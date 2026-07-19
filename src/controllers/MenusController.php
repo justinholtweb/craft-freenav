@@ -7,7 +7,6 @@ use craft\helpers\Json;
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
 use justinholt\freenav\assetbundles\FreeNavAsset;
-use justinholt\freenav\elements\Node;
 use justinholt\freenav\enums\Propagation;
 use justinholt\freenav\FreeNav;
 use justinholt\freenav\models\Menu;

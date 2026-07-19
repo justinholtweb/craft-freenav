@@ -4,11 +4,9 @@ namespace justinholt\freenav\services;
 
 use Craft;
 use craft\base\Element;
-use craft\helpers\Json;
 use justinholt\freenav\elements\db\NodeQuery;
 use justinholt\freenav\elements\Node;
 use justinholt\freenav\enums\NodeType;
-use justinholt\freenav\FreeNav;
 use justinholt\freenav\models\Menu;
 use yii\base\Component;
 

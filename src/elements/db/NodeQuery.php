@@ -8,6 +8,11 @@ use justinholt\freenav\elements\Node;
 use justinholt\freenav\enums\NodeType;
 use justinholt\freenav\FreeNav;
 
+/**
+ * @method Node[] all($db = null)
+ * @method Node|null one($db = null)
+ * @method Node|null nth(int $n, ?\yii\db\Connection $db = null)
+ */
 class NodeQuery extends ElementQuery
 {
     public mixed $menuId = null;
@@ -132,7 +137,7 @@ class NodeQuery extends ElementQuery
 
     /**
      * @inheritdoc
-     * @return Node[]
+     * @return Node
      */
     public function createElement(array $row): Node
     {

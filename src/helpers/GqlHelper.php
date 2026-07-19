@@ -2,7 +2,6 @@
 
 namespace justinholt\freenav\helpers;
 
-use Craft;
 use craft\helpers\Gql as CraftGqlHelper;
 
 class GqlHelper

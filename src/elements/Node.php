@@ -4,9 +4,9 @@ namespace justinholt\freenav\elements;
 
 use Craft;
 use craft\base\Element;
+use craft\base\ElementInterface;
 use craft\elements\actions\Delete;
 use craft\elements\actions\SetStatus;
-use craft\elements\db\ElementQueryInterface;
 use craft\helpers\App;
 use craft\helpers\Html;
 use craft\helpers\Json;
@@ -47,7 +47,7 @@ class Node extends Element
     {
         // Filter out properties not defined on this class to avoid UnknownPropertyException
         if (is_array($config)) {
-            $config = array_filter($config, function ($key) {
+            $config = array_filter($config, function($key) {
                 return property_exists($this, $key) || method_exists($this, 'set' . ucfirst($key));
             }, ARRAY_FILTER_USE_KEY);
         }
@@ -55,7 +55,7 @@ class Node extends Element
         parent::__construct($config);
     }
 
-    private ?Element $_linkedElement = null;
+    private ?ElementInterface $_linkedElement = null;
     private ?bool $_linkedElementLoaded = false;
     private ?Menu $_menu = null;
 
@@ -224,7 +224,7 @@ class Node extends Element
         return $this->newWindow ? '_blank' : '';
     }
 
-    public function getLinkedElement(): ?Element
+    public function getLinkedElement(): ?ElementInterface
     {
         if ($this->_linkedElementLoaded) {
             return $this->_linkedElement;
@@ -292,6 +292,7 @@ class Node extends Element
 
     public function hasActiveDescendant(): bool
     {
+        /** @var Node[] $children */
         $children = $this->getChildren()->all();
 
         foreach ($children as $child) {
@@ -639,14 +640,14 @@ class Node extends Element
         return $user->can('freeNav-deleteNodes');
     }
 
-    protected function tableAttributeHtml(string $attribute): string
+    protected function attributeHtml(string $attribute): string
     {
         return match ($attribute) {
             'nodeType' => Html::tag('span', $this->getNodeType()->label(), [
                 'style' => 'color: ' . $this->getNodeType()->color(),
             ]),
             'newWindow' => $this->newWindow ? '<span data-icon="check"></span>' : '',
-            default => parent::tableAttributeHtml($attribute),
+            default => parent::attributeHtml($attribute),
         };
     }
 

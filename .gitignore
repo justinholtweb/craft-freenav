@@ -5,3 +5,6 @@ vendor/
 .vscode/
 .DS_Store
 *.swp
+.ddev/
+composer.lock
+.phpunit.cache/

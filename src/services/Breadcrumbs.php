@@ -3,8 +3,8 @@
 namespace justinholt\freenav\services;
 
 use Craft;
-use craft\elements\Entry;
 use craft\elements\Category;
+use craft\elements\Entry;
 use yii\base\Component;
 
 class Breadcrumbs extends Component

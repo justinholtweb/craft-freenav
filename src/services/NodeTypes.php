@@ -2,8 +2,6 @@
 
 namespace justinholt\freenav\services;
 
-use Craft;
-use craft\base\Element;
 use justinholt\freenav\enums\NodeType;
 use justinholt\freenav\events\RegisterLinkableElementEvent;
 use justinholt\freenav\events\RegisterNodeTypeEvent;
@@ -26,7 +24,7 @@ class NodeTypes extends Component
         $this->_types = NodeType::cases();
 
         // Filter out product type if Commerce not installed
-        $this->_types = array_filter($this->_types, function (NodeType $type) {
+        $this->_types = array_filter($this->_types, function(NodeType $type) {
             if ($type === NodeType::Product) {
                 return class_exists('craft\\commerce\\elements\\Product');
             }

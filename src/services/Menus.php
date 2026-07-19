@@ -5,20 +5,16 @@ namespace justinholt\freenav\services;
 use Craft;
 use craft\db\Query;
 use craft\events\ConfigEvent;
-use craft\helpers\Db;
-use craft\helpers\ProjectConfig as ProjectConfigHelper;
 use craft\helpers\StringHelper;
 use craft\models\FieldLayout;
 use craft\models\Structure;
 use justinholt\freenav\elements\Node;
 use justinholt\freenav\events\MenuEvent;
-use justinholt\freenav\FreeNav;
 use justinholt\freenav\models\Menu;
 use justinholt\freenav\models\MenuSiteSettings;
 use justinholt\freenav\records\MenuRecord;
 use justinholt\freenav\records\MenuSiteRecord;
 use yii\base\Component;
-use yii\base\Exception;
 
 class Menus extends Component
 {
@@ -95,7 +91,7 @@ class Menus extends Component
             return $this->getAllMenus();
         }
 
-        return array_filter($this->getAllMenus(), function (Menu $menu) use ($user) {
+        return array_filter($this->getAllMenus(), function(Menu $menu) use ($user) {
             return $user->can('freeNav-manageMenu:' . $menu->uid)
                 || $user->can('freeNav-manageMenus');
         });
@@ -241,7 +237,7 @@ class Menus extends Component
         if ($menu && $this->hasEventHandlers(self::EVENT_AFTER_SAVE_MENU)) {
             $this->trigger(self::EVENT_AFTER_SAVE_MENU, new MenuEvent([
                 'menu' => $menu,
-                'isNew' => $isNew ?? false,
+                'isNew' => $isNew,
             ]));
         }
     }

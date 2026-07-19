@@ -5,7 +5,6 @@ namespace justinholt\freenav\console\controllers;
 use Craft;
 use craft\console\Controller;
 use craft\db\Query;
-use justinholt\freenav\elements\Node;
 use justinholt\freenav\FreeNav;
 use justinholt\freenav\models\Menu;
 use justinholt\freenav\models\MenuSiteSettings;

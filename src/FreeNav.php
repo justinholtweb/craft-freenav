@@ -6,11 +6,6 @@ use Craft;
 use craft\base\Element;
 use craft\base\Model;
 use craft\base\Plugin;
-use craft\elements\Entry;
-use craft\elements\Category;
-use craft\elements\Asset;
-use craft\events\ConfigEvent;
-use craft\events\DefineFieldLayoutFieldsEvent;
 use craft\events\ModelEvent;
 use craft\events\RegisterComponentTypesEvent;
 use craft\events\RegisterGqlQueriesEvent;
@@ -19,12 +14,10 @@ use craft\events\RegisterGqlTypesEvent;
 use craft\events\RegisterUrlRulesEvent;
 use craft\events\RegisterUserPermissionsEvent;
 use craft\helpers\UrlHelper;
-use craft\models\FieldLayout;
 use craft\services\Elements;
 use craft\services\Fields;
 use craft\services\Gc;
 use craft\services\Gql;
-use craft\services\ProjectConfig;
 use craft\services\UserPermissions;
 use craft\web\twig\variables\CraftVariable;
 use craft\web\UrlManager;
@@ -167,7 +160,7 @@ class FreeNav extends Plugin
         Event::on(
             Elements::class,
             Elements::EVENT_REGISTER_ELEMENT_TYPES,
-            function (RegisterComponentTypesEvent $event) {
+            function(RegisterComponentTypesEvent $event) {
                 $event->types[] = Node::class;
             }
         );
@@ -178,7 +171,7 @@ class FreeNav extends Plugin
         Event::on(
             Fields::class,
             Fields::EVENT_REGISTER_FIELD_TYPES,
-            function (RegisterComponentTypesEvent $event) {
+            function(RegisterComponentTypesEvent $event) {
                 $event->types[] = MenuField::class;
             }
         );
@@ -189,7 +182,7 @@ class FreeNav extends Plugin
         Event::on(
             CraftVariable::class,
             CraftVariable::EVENT_INIT,
-            function (Event $event) {
+            function(Event $event) {
                 $event->sender->set('freenav', FreeNavVariable::class);
             }
         );
@@ -200,7 +193,7 @@ class FreeNav extends Plugin
         Event::on(
             UrlManager::class,
             UrlManager::EVENT_REGISTER_CP_URL_RULES,
-            function (RegisterUrlRulesEvent $event) {
+            function(RegisterUrlRulesEvent $event) {
                 $event->rules['free-nav'] = 'free-nav/menus/index';
                 $event->rules['free-nav/menus'] = 'free-nav/menus/index';
                 $event->rules['free-nav/menus/new'] = 'free-nav/menus/edit';
@@ -226,7 +219,7 @@ class FreeNav extends Plugin
         Event::on(
             Element::class,
             Element::EVENT_AFTER_SAVE,
-            function (ModelEvent $event) {
+            function(ModelEvent $event) {
                 /** @var Element $element */
                 $element = $event->sender;
                 if (!$element instanceof Node) {
@@ -239,7 +232,7 @@ class FreeNav extends Plugin
         Event::on(
             Element::class,
             Element::EVENT_AFTER_DELETE,
-            function (Event $event) {
+            function(Event $event) {
                 /** @var Element $element */
                 $element = $event->sender;
                 if (!$element instanceof Node) {
@@ -254,7 +247,7 @@ class FreeNav extends Plugin
         Event::on(
             Gc::class,
             Gc::EVENT_RUN,
-            function () {
+            function() {
                 Craft::$app->getGc()->deletePartialElements(
                     Node::class,
                     '{{%freenav_nodes}}',
@@ -269,7 +262,7 @@ class FreeNav extends Plugin
         Event::on(
             UserPermissions::class,
             UserPermissions::EVENT_REGISTER_PERMISSIONS,
-            function (RegisterUserPermissionsEvent $event) {
+            function(RegisterUserPermissionsEvent $event) {
                 $menus = $this->getMenus()->getAllMenus();
 
                 $menuPermissions = [];
@@ -319,7 +312,7 @@ class FreeNav extends Plugin
         Event::on(
             Gql::class,
             Gql::EVENT_REGISTER_GQL_TYPES,
-            function (RegisterGqlTypesEvent $event) {
+            function(RegisterGqlTypesEvent $event) {
                 $event->types[] = NodeInterface::class;
             }
         );
@@ -327,7 +320,7 @@ class FreeNav extends Plugin
         Event::on(
             Gql::class,
             Gql::EVENT_REGISTER_GQL_QUERIES,
-            function (RegisterGqlQueriesEvent $event) {
+            function(RegisterGqlQueriesEvent $event) {
                 $event->queries = array_merge(
                     $event->queries,
                     GqlNodeQuery::getQueries()
@@ -338,7 +331,7 @@ class FreeNav extends Plugin
         Event::on(
             Gql::class,
             Gql::EVENT_REGISTER_GQL_SCHEMA_COMPONENTS,
-            function (RegisterGqlSchemaComponentsEvent $event) {
+            function(RegisterGqlSchemaComponentsEvent $event) {
                 $menus = $this->getMenus()->getAllMenus();
 
                 $queries = [];

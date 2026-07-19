@@ -6,7 +6,7 @@ use craft\elements\Asset;
 use craft\elements\Category;
 use craft\elements\Entry;
 
-enum NodeType: string
+enum NodeType : string
 {
     case Entry = 'entry';
     case Category = 'category';
