@@ -3,10 +3,12 @@
 namespace justinholt\freenav\controllers;
 
 use Craft;
+use craft\helpers\Cp;
 use craft\helpers\Json;
 use craft\web\Controller;
 use justinholt\freenav\elements\Node;
 use justinholt\freenav\FreeNav;
+use yii\web\BadRequestHttpException;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
@@ -59,6 +61,63 @@ class NodesController extends Controller
                 'enabled' => $node->enabled,
                 'level' => $node->level,
             ],
+        ]);
+    }
+
+    /**
+     * Renders the element-selection input for a linkable node type so the
+     * builder UI can inject a working entry/category/asset/product picker.
+     */
+    public function actionElementSelectHtml(): Response
+    {
+        $this->requireAcceptsJson();
+
+        $request = Craft::$app->getRequest();
+        $nodeType = (string)$request->getRequiredParam('nodeType');
+        $siteId = $request->getParam('siteId');
+        $selectedId = $request->getParam('selectedId');
+
+        $linkable = FreeNav::getInstance()->getNodeTypes()->getLinkableElementTypes();
+        if (!isset($linkable[$nodeType])) {
+            throw new BadRequestHttpException("“{$nodeType}” is not a linkable node type.");
+        }
+
+        /** @var class-string<\craft\base\ElementInterface> $elementType */
+        $elementType = $linkable[$nodeType]['elementType'];
+
+        $criteria = [];
+        if ($siteId) {
+            $criteria['siteId'] = (int)$siteId;
+        }
+
+        $elements = [];
+        if ($selectedId) {
+            $element = Craft::$app->getElements()->getElementById(
+                (int)$selectedId,
+                $elementType,
+                $siteId ? (int)$siteId : null,
+            );
+            if ($element) {
+                $elements[] = $element;
+            }
+        }
+
+        $view = $this->getView();
+
+        $html = Cp::elementSelectHtml([
+            'id' => 'freenav-linked-element',
+            'name' => 'linkedElement',
+            'elementType' => $elementType,
+            'single' => true,
+            'criteria' => $criteria,
+            'elements' => $elements,
+            'selectionLabel' => Craft::t('free-nav', 'Choose an element'),
+        ]);
+
+        return $this->asJson([
+            'html' => $html,
+            'headHtml' => $view->getHeadHtml(),
+            'bodyHtml' => $view->getBodyHtml(),
         ]);
     }
 

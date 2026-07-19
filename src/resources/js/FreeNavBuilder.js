@@ -13,6 +13,7 @@
         maxLevels: null,
         maxNodes: null,
         siteId: null,
+        _loadedElementType: null,
 
         init: function() {
             const builder = document.getElementById('freenav-builder');
@@ -37,6 +38,14 @@
 
             btn.addEventListener('click', () => {
                 this._showPanel('freenav-add-panel');
+
+                // Sync the URL/element fields to the currently-selected type
+                // (and load a fresh element picker) each time the panel opens.
+                const typeSelect = document.getElementById('freenav-node-type');
+                if (typeSelect) {
+                    this._loadedElementType = null;
+                    this._updateTypeFields(typeSelect.value, typeSelect.selectedOptions[0]);
+                }
             });
 
             const submitBtn = document.getElementById('freenav-add-submit');
@@ -294,10 +303,65 @@
             if (elementField) {
                 elementField.style.display = isElement ? '' : 'none';
             }
+
+            if (isElement) {
+                this._loadElementSelector(type);
+            } else {
+                this._clearElementSelector();
+            }
+        },
+
+        _loadElementSelector: function(nodeType) {
+            const container = document.getElementById('freenav-element-select');
+            if (!container) return;
+
+            // Selector for this type is already in place.
+            if (this._loadedElementType === nodeType) return;
+
+            // Optimistically mark as loaded to prevent duplicate in-flight
+            // requests if the type <select> fires change rapidly.
+            this._loadedElementType = nodeType;
+            container.innerHTML = '';
+
+            Craft.sendActionRequest('POST', 'free-nav/nodes/element-select-html', {
+                data: { nodeType: nodeType, siteId: this.siteId },
+            })
+                .then(response => {
+                    // A newer type may have been selected while this was loading.
+                    if (this._loadedElementType !== nodeType) return;
+
+                    const data = response.data || {};
+                    $(container).html(data.html || '');
+                    if (data.headHtml) {
+                        Craft.appendHeadHtml(data.headHtml);
+                    }
+                    if (data.bodyHtml) {
+                        Craft.appendBodyHtml(data.bodyHtml);
+                    }
+                })
+                .catch(() => {
+                    this._loadedElementType = null;
+                    Craft.cp.displayError(Craft.t('free-nav', 'Could not load the element selector.'));
+                });
+        },
+
+        _clearElementSelector: function() {
+            const container = document.getElementById('freenav-element-select');
+            if (container) {
+                container.innerHTML = '';
+            }
+            this._loadedElementType = null;
+        },
+
+        _getSelectedElementId: function() {
+            const chip = document.querySelector('#freenav-element-select .elements [data-id]');
+            return chip ? chip.getAttribute('data-id') : null;
         },
 
         _submitAddNode: function() {
-            const type = document.getElementById('freenav-node-type')?.value || 'custom';
+            const typeSelect = document.getElementById('freenav-node-type');
+            const type = typeSelect?.value || 'custom';
+            const isElementType = typeSelect?.selectedOptions[0]?.dataset?.isElement === '1';
             const title = document.getElementById('freenav-node-title')?.value || '';
             const url = document.getElementById('freenav-node-url')?.value || '';
             const parent = document.getElementById('freenav-node-parent')?.value || '';
@@ -305,12 +369,22 @@
             const icon = document.getElementById('freenav-node-icon')?.value || '';
             const badge = document.getElementById('freenav-node-badge')?.value || '';
 
+            let linkedElementId = null;
+            if (isElementType) {
+                linkedElementId = this._getSelectedElementId();
+                if (!linkedElementId) {
+                    Craft.cp.displayError(Craft.t('free-nav', 'Please choose an element to link to.'));
+                    return;
+                }
+            }
+
             const data = {
                 menuId: this.menuId,
                 node: {
                     nodeType: type,
                     title: title,
-                    url: url || null,
+                    url: isElementType ? null : (url || null),
+                    linkedElementId: linkedElementId,
                     parentId: parent || null,
                     classes: classes || null,
                     icon: icon || null,

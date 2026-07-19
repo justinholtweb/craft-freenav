@@ -1,6 +1,14 @@
 # Changelog
 
-## 1.0.1 - 2026-07-19
+## 5.0.2 - 2026-07-19
+
+### Fixed
+- Fixed the element node types (Entry, Category, Asset, Product) being impossible to create in the node builder: the "Select Element" field now renders Craft's element picker so you can choose which element the node links to. Previously the field row appeared but its container stayed empty, and the selected element was never sent to the server. ([#reported](https://github.com/justinholtweb/craft-free-nav/issues))
+
+### Added
+- `nodes/element-select-html` controller action that renders the element selector for a given linkable node type (used by the builder UI).
+
+## 5.0.1 - 2026-07-19
 
 ### Fixed
 - Fixed the element index columns for nodes: the `Node Type` and `New Window` columns now render their styled/custom HTML again (the Craft 3/4 `tableAttributeHtml()` hook was renamed to `attributeHtml()` in Craft 5, so the custom rendering was silently ignored).
@@ -10,7 +18,7 @@
 - Added static analysis (PHPStan level 5, clean), code-style enforcement (ECS with Craft's rule set), and a PHPUnit unit-test suite for the plugin's enums and visibility rules.
 - Removed unused imports and redundant code flagged by the new tooling.
 
-## 1.0.0 - 2026-02-15
+## 5.0.0 - 2026-02-15
 
 ### Added
 - Initial release
