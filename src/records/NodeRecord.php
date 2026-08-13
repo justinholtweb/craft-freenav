@@ -7,10 +7,9 @@ use craft\db\ActiveRecord;
 /**
  * @property int $id
  * @property int $menuId
- * @property int|null $parentId
  * @property int|null $linkedElementId
  * @property string $nodeType
- * @property string|null $url
+ * @property string|null $customUrl
  * @property string|null $classes
  * @property string|null $urlSuffix
  * @property string|null $customAttributes

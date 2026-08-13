@@ -31,7 +31,7 @@ class ImportExportController extends Controller
             ->all();
 
         $exportData = [
-            'freeNav' => '1.0.0',
+            'freeNav' => '1.1.0',
             'menu' => [
                 'name' => $menu->name,
                 'handle' => $menu->handle,
@@ -123,7 +123,7 @@ class ImportExportController extends Controller
             $nodeData = [
                 'title' => $node->title,
                 'nodeType' => $node->nodeType,
-                'url' => $node->url,
+                'customUrl' => $node->customUrl,
                 'classes' => $node->classes,
                 'urlSuffix' => $node->urlSuffix,
                 'customAttributes' => $node->getCustomAttributesArray(),
@@ -161,7 +161,7 @@ class ImportExportController extends Controller
             $data = [
                 'title' => $nodeData['title'] ?? '',
                 'nodeType' => $nodeData['nodeType'] ?? 'custom',
-                'url' => $nodeData['url'] ?? null,
+                'customUrl' => $nodeData['customUrl'] ?? $nodeData['url'] ?? null,
                 'classes' => $nodeData['classes'] ?? null,
                 'urlSuffix' => $nodeData['urlSuffix'] ?? null,
                 'customAttributes' => $nodeData['customAttributes'] ?? null,
@@ -332,7 +332,7 @@ class ImportExportController extends Controller
             $nodeData = [
                 'title' => $navNode['title'] ?? '',
                 'nodeType' => $this->_mapVerbbNodeType($navNode['type']),
-                'url' => $navNode['url'] ?? null,
+                'customUrl' => $navNode['url'] ?? null,
                 'linkedElementId' => $this->_resolveVerbbElementId($navNode),
                 'classes' => $navNode['classes'] ?? null,
                 'urlSuffix' => $navNode['urlSuffix'] ?? null,

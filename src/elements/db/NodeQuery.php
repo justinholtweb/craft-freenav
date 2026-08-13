@@ -66,12 +66,17 @@ class NodeQuery extends ElementQuery
     {
         $this->joinElementTable('freenav_nodes');
 
+        // Nodes always live in their menu's structure, so join the structure data
+        // even when the query doesn't narrow to a single menu. Without this, a bare
+        // Node::find()->id() comes back with no level/lft/rgt and no way to tell
+        // where the node sits in the menu.
+        $this->withStructure ??= !$this->trashed;
+
         $this->query->select([
             'freenav_nodes.menuId',
-            'freenav_nodes.parentId',
             'freenav_nodes.linkedElementId',
             'freenav_nodes.nodeType',
-            'freenav_nodes.url',
+            'freenav_nodes.customUrl',
             'freenav_nodes.classes',
             'freenav_nodes.urlSuffix',
             'freenav_nodes.customAttributes',

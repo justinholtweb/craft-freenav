@@ -28,10 +28,9 @@ class Node extends Element
     public const EVENT_NODE_ACTIVE = 'nodeActive';
 
     public ?int $menuId = null;
-    public ?int $parentId = null;
     public ?int $linkedElementId = null;
     public string $nodeType = 'custom';
-    public ?string $url = null;
+    public ?string $customUrl = null;
     public ?string $classes = null;
     public ?string $urlSuffix = null;
     public array|string|null $customAttributes = null;
@@ -176,7 +175,7 @@ class Node extends Element
 
     protected static function defineSearchableAttributes(): array
     {
-        return ['title', 'url', 'classes', 'nodeType'];
+        return ['title', 'customUrl', 'classes', 'nodeType'];
     }
 
     public function getUrl(): ?string
@@ -191,7 +190,7 @@ class Node extends Element
             $element = $this->getLinkedElement();
             $baseUrl = $element?->getUrl();
         } else {
-            $baseUrl = $this->_parseUrl($this->url);
+            $baseUrl = $this->_parseUrl($this->customUrl);
         }
 
         if ($baseUrl === null) {
@@ -565,10 +564,9 @@ class Node extends Element
         }
 
         $record->menuId = $this->menuId;
-        $record->parentId = $this->parentId;
         $record->linkedElementId = $this->linkedElementId;
         $record->nodeType = $this->nodeType;
-        $record->url = $this->url;
+        $record->customUrl = $this->customUrl;
         $record->classes = $this->classes;
         $record->urlSuffix = $this->urlSuffix;
         $record->customAttributes = is_array($this->customAttributes) ? Json::encode($this->customAttributes) : $this->customAttributes;
@@ -591,6 +589,20 @@ class Node extends Element
         }
 
         parent::afterSave($isNew);
+    }
+
+    public function afterMoveInStructure(int $structureId): void
+    {
+        // Reordering a node changes the rendered menu without saving the element,
+        // so the cache has to be invalidated off the move itself
+        if ($this->menuId) {
+            try {
+                FreeNav::getInstance()->getMenuCache()->invalidate($this->getMenu()->handle);
+            } catch (InvalidConfigException) {
+            }
+        }
+
+        parent::afterMoveInStructure($structureId);
     }
 
     public function afterDelete(): void

@@ -77,10 +77,9 @@ class Install extends Migration
         $this->createTable('{{%freenav_nodes}}', [
             'id' => $this->integer()->notNull(),
             'menuId' => $this->integer()->notNull(),
-            'parentId' => $this->integer(),
             'linkedElementId' => $this->integer(),
             'nodeType' => $this->string(50)->notNull(),
-            'url' => $this->text(),
+            'customUrl' => $this->text(),
             'classes' => $this->string(255),
             'urlSuffix' => $this->string(255),
             'customAttributes' => $this->text(),

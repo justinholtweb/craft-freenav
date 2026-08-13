@@ -7,6 +7,7 @@ use craft\helpers\Template;
 use justinholt\freenav\elements\Node;
 use justinholt\freenav\enums\Preset;
 use justinholt\freenav\FreeNav;
+use justinholt\freenav\helpers\NodeHelper;
 use Twig\Markup;
 use yii\base\Component;
 
@@ -89,7 +90,7 @@ class Renderer extends Component
 
         $nodes = $query->all();
 
-        return $this->_buildTree($nodes);
+        return NodeHelper::buildTree($nodes);
     }
 
     public function getActiveNode(string $handle): ?Node
@@ -131,7 +132,10 @@ class Renderer extends Component
         // Filter by visibility
         if ($options['visibilityCheck']) {
             $nodes = array_filter($nodes, fn(Node $node) => $node->isVisible());
-            $nodes = array_values($nodes);
+
+            // Presets nest by level, so drop the descendants of any node that was
+            // filtered out instead of letting them surface as their own top-level items
+            $nodes = NodeHelper::flattenTree(NodeHelper::buildTree(array_values($nodes)));
         }
 
         if (empty($nodes)) {
@@ -160,42 +164,5 @@ class Renderer extends Component
         }
 
         return $html;
-    }
-
-    private function _buildTree(array $nodes, int $parentLevel = 0): array
-    {
-        $tree = [];
-        $byParent = [];
-
-        foreach ($nodes as $node) {
-            $parentId = $node->parentId ?? 'root';
-            $byParent[$parentId][] = $node;
-        }
-
-        $rootNodes = $byParent['root'] ?? [];
-
-        foreach ($rootNodes as $node) {
-            $tree[] = [
-                'node' => $node,
-                'children' => $this->_getChildren($node, $byParent),
-            ];
-        }
-
-        return $tree;
-    }
-
-    private function _getChildren(Node $parent, array &$byParent): array
-    {
-        $children = [];
-        $childNodes = $byParent[$parent->id] ?? [];
-
-        foreach ($childNodes as $node) {
-            $children[] = [
-                'node' => $node,
-                'children' => $this->_getChildren($node, $byParent),
-            ];
-        }
-
-        return $children;
     }
 }

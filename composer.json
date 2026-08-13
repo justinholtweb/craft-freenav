@@ -2,7 +2,7 @@
   "name": "justinholtweb/craft-free-nav",
   "description": "A free, full-featured navigation menu builder for Craft CMS 5",
   "type": "craft-plugin",
-  "version": "5.0.2",
+  "version": "5.1.0",
   "keywords": ["craft", "cms", "navigation", "menu", "nav"],
   "license": "proprietary",
   "authors": [

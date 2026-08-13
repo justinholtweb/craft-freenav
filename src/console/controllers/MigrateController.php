@@ -173,7 +173,7 @@ class MigrateController extends Controller
             $nodeData = [
                 'title' => $navNode['title'] ?? '',
                 'nodeType' => $nodeType,
-                'url' => $navNode['url'] ?? null,
+                'customUrl' => $navNode['url'] ?? null,
                 'linkedElementId' => $this->_resolveElementId($navNode),
                 'classes' => $navNode['classes'] ?? null,
                 'urlSuffix' => $navNode['urlSuffix'] ?? null,

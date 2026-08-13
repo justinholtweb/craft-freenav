@@ -1,5 +1,26 @@
 # Changelog
 
+## 5.1.0 - 2026-08-13
+
+### Fixed
+- Fixed nested menus rendering flat through `craft.freenav.tree()`. Node hierarchy lives in the menu's structure, but the tree builder grouped nodes by a `parentId` column that nothing ever wrote, so every node came back as a root. Trees are now built from the structure's `level`.
+- Fixed `Nodes::addNodes()` silently flattening menus on multi-site installs. The parent node was looked up against the current site only, so a parent living on another site resolved to `null` and the child was appended to the root instead. Parent lookups now search all sites and prefer the new node's site.
+- Fixed `node.url` in Twig and GraphQL returning the raw custom URL — empty for element-linked nodes — instead of the resolved one. The `url` property shadowed `getUrl()`; it is now `customUrl`, leaving `getUrl()` as the only accessor. See **Changed** below.
+- Fixed duplicated menus losing their nesting: `Menus::duplicateMenu()` copied nodes but never added them to the new menu's structure, so the copy came out flat (and invisible to structure-ordered queries).
+- Fixed nodes whose parent is hidden (disabled or failing a visibility rule) being promoted to the top level when rendering. They are now dropped along with their parent.
+- Fixed reordering a node — in the builder or the element index — leaving a stale cached menu on the front end.
+- Fixed the CP builder failing to find nodes that don't exist on the current CP site.
+- `Nodes::moveNode()` no longer throws when the requested parent or sibling can't be resolved; the node falls back to the menu root and a warning is logged.
+
+### Changed
+- **Breaking:** `Node::$url` is now `Node::$customUrl`, and the `freenav_nodes.url` column is now `customUrl`. Templates should call `node.getUrl()` (they always should have — `node.url` returned the wrong value for element-linked nodes). GraphQL's `url` field is unchanged and now resolves correctly. Menu exports emit `customUrl` and are stamped `"freeNav": "1.1.0"`; imports still accept the old `url` key.
+- **Breaking:** the unused `freenav_nodes.parentId` column has been dropped, along with `Node::$parentId`, which shadowed Craft's own `Element::getParentId()`. `node.parentId`, `node.getParent()`, and `node.getChildren()` now all read from the menu's structure.
+- Node queries now join structure data even when the query isn't scoped to a single menu, so `level`, `lft`, and `rgt` are populated on any `Node::find()` result.
+
+### Added
+- `Nodes::findNodeInMenu()`, `Nodes::placeNode()`, and `Nodes::moveNode()` — one place that resolves and positions nodes within a menu's structure.
+- `NodeHelper::buildParentMap()` — node ID => parent ID map derived from structure order.
+
 ## 5.0.2 - 2026-07-19
 
 ### Fixed

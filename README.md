@@ -239,6 +239,7 @@ Each `Node` element provides:
 |----------------|------|-------------|
 | `title` | `string` | Node title (synced from element or custom) |
 | `getUrl()` | `?string` | Resolved URL (element URL, custom URL, or null for passive) |
+| `customUrl` | `?string` | The raw URL typed into the node — use `getUrl()` unless you specifically want this |
 | `getLink()` | `Markup` | Full `<a>` tag with all attributes |
 | `nodeType` | `string` | Type: `entry`, `category`, `asset`, `product`, `custom`, `passive`, `site` |
 | `getNodeType()` | `NodeType` | Enum instance |
@@ -260,6 +261,8 @@ Each `Node` element provides:
 | `hasOverriddenTitle()` | `bool` | Title differs from linked element |
 | `getLinkAttributes(extra)` | `array` | HTML attributes for the link |
 | `getAriaAttributes()` | `array` | Computed ARIA attributes |
+| `level` | `int` | Depth in the menu, starting at 1 |
+| `getParent()` / `getChildren()` | | Craft's structure methods — node hierarchy lives in the menu's structure |
 | `getCustomAttributesArray()` | `array` | Custom `[{key, value}]` attributes |
 | `getMenu()` | `Menu` | Parent menu model |
 
@@ -376,7 +379,7 @@ POST a JSON file to `free-nav/import-export/import` from the CP. Element-linked 
 ### Format
 ```json
 {
-    "freeNav": "1.0.0",
+    "freeNav": "1.1.0",
     "menu": {
         "name": "Main Menu",
         "handle": "mainMenu",
@@ -388,7 +391,7 @@ POST a JSON file to `free-nav/import-export/import` from the CP. Element-linked 
         {
             "title": "Home",
             "nodeType": "custom",
-            "url": "/",
+            "customUrl": "/",
             "level": 1,
             "children": []
         }
@@ -444,7 +447,7 @@ Event::on(
     Node::EVENT_NODE_ACTIVE,
     function (NodeActiveEvent $event) {
         // Force a node active based on custom logic
-        if ($event->node->url === '/special') {
+        if ($event->node->getUrl() === '/special') {
             $event->isActive = true;
         }
     }

@@ -383,7 +383,7 @@
                 node: {
                     nodeType: type,
                     title: title,
-                    url: isElementType ? null : (url || null),
+                    customUrl: isElementType ? null : (url || null),
                     linkedElementId: linkedElementId,
                     parentId: parent || null,
                     classes: classes || null,
@@ -420,7 +420,7 @@
 
                     document.getElementById('freenav-edit-node-id').value = node.id;
                     document.getElementById('freenav-edit-title').value = node.title || '';
-                    document.getElementById('freenav-edit-url').value = node.url || '';
+                    document.getElementById('freenav-edit-url').value = node.customUrl || '';
                     document.getElementById('freenav-edit-classes').value = node.classes || '';
                     document.getElementById('freenav-edit-url-suffix').value = node.urlSuffix || '';
                     document.getElementById('freenav-edit-icon').value = node.icon || '';
@@ -467,7 +467,7 @@
             const data = {
                 nodeId: nodeId,
                 title: document.getElementById('freenav-edit-title')?.value || '',
-                url: document.getElementById('freenav-edit-url')?.value || null,
+                customUrl: document.getElementById('freenav-edit-url')?.value || null,
                 classes: document.getElementById('freenav-edit-classes')?.value || null,
                 urlSuffix: document.getElementById('freenav-edit-url-suffix')?.value || null,
                 icon: document.getElementById('freenav-edit-icon')?.value || null,

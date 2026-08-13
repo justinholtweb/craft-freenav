@@ -46,7 +46,7 @@ use yii\base\Event;
  */
 class FreeNav extends Plugin
 {
-    public string $schemaVersion = '1.0.0';
+    public string $schemaVersion = '1.0.1';
     public bool $hasCpSettings = true;
     public bool $hasCpSection = true;
 

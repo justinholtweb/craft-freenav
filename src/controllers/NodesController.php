@@ -129,14 +129,14 @@ class NodesController extends Controller
         $request = Craft::$app->getRequest();
         $nodeId = $request->getRequiredBodyParam('nodeId');
 
-        $node = Node::find()->id($nodeId)->status(null)->one();
+        $node = $this->_getNode($nodeId);
 
         if (!$node) {
             throw new NotFoundHttpException('Node not found');
         }
 
         $node->title = $request->getBodyParam('title', $node->title);
-        $node->url = $request->getBodyParam('url', $node->url);
+        $node->customUrl = $request->getBodyParam('customUrl', $node->customUrl);
         $node->classes = $request->getBodyParam('classes', $node->classes);
         $node->urlSuffix = $request->getBodyParam('urlSuffix', $node->urlSuffix);
         $node->newWindow = (bool)$request->getBodyParam('newWindow', $node->newWindow);
@@ -175,7 +175,7 @@ class NodesController extends Controller
 
         $nodeId = Craft::$app->getRequest()->getRequiredBodyParam('nodeId');
 
-        $node = Node::find()->id($nodeId)->status(null)->one();
+        $node = $this->_getNode($nodeId);
 
         if (!$node) {
             throw new NotFoundHttpException('Node not found');
@@ -192,44 +192,24 @@ class NodesController extends Controller
 
         $nodeId = Craft::$app->getRequest()->getRequiredParam('nodeId');
 
-        $node = Node::find()->id($nodeId)->status(null)->one();
+        $node = $this->_getNode($nodeId);
 
         if (!$node) {
             throw new NotFoundHttpException('Node not found');
-        }
-
-        // Get parent from structure via DB query
-        $parentId = null;
-        $menu = $node->getMenu();
-        if ($menu->structureId) {
-            $parentId = (new \craft\db\Query())
-                ->select(['parent.elementId'])
-                ->from(['child' => '{{%structureelements}}'])
-                ->innerJoin(['parent' => '{{%structureelements}}'], [
-                    'and',
-                    '[[parent.structureId]] = [[child.structureId]]',
-                    '[[parent.lft]] < [[child.lft]]',
-                    '[[parent.rgt]] > [[child.rgt]]',
-                    '[[parent.level]] = [[child.level]] - 1',
-                ])
-                ->where([
-                    'child.structureId' => $menu->structureId,
-                    'child.elementId' => $node->id,
-                ])
-                ->scalar() ?: null;
         }
 
         return $this->asJson([
             'id' => $node->id,
             'title' => $node->title,
             'nodeType' => $node->nodeType,
-            'url' => $node->url,
+            'customUrl' => $node->customUrl,
+            'url' => $node->getUrl(),
             'classes' => $node->classes,
             'urlSuffix' => $node->urlSuffix,
             'newWindow' => $node->newWindow,
             'icon' => $node->icon,
             'badge' => $node->badge,
-            'parentId' => $parentId,
+            'parentId' => $node->getParentId(),
         ]);
     }
 
@@ -249,7 +229,7 @@ class NodesController extends Controller
 
         $exclude = null;
         if ($excludeNodeId) {
-            $exclude = Node::find()->id($excludeNodeId)->status(null)->one();
+            $exclude = $this->_getNode($excludeNodeId);
         }
 
         $options = FreeNav::getInstance()->getNodes()->getParentOptions($menu, $exclude);
@@ -265,7 +245,7 @@ class NodesController extends Controller
         $nodeId = Craft::$app->getRequest()->getRequiredBodyParam('nodeId');
         $enabled = (bool)Craft::$app->getRequest()->getRequiredBodyParam('enabled');
 
-        $node = Node::find()->id($nodeId)->status(null)->one();
+        $node = $this->_getNode($nodeId);
 
         if (!$node) {
             throw new NotFoundHttpException('Node not found');
@@ -287,32 +267,37 @@ class NodesController extends Controller
         $parentId = $request->getBodyParam('parentId');
         $prevId = $request->getBodyParam('prevId');
 
-        $node = Node::find()->id($nodeId)->status(null)->one();
+        $node = $this->_getNode($nodeId);
 
         if (!$node) {
             throw new NotFoundHttpException('Node not found');
         }
 
         $menu = $node->getMenu();
-        $structureId = $menu->structureId;
+        $nodes = FreeNav::getInstance()->getNodes();
 
-        if ($parentId) {
-            $parentNode = Craft::$app->getElements()->getElementById($parentId);
-            if ($prevId) {
-                $prevNode = Craft::$app->getElements()->getElementById($prevId);
-                Craft::$app->getStructures()->moveAfter($structureId, $node, $prevNode);
-            } else {
-                Craft::$app->getStructures()->prepend($structureId, $node, $parentNode);
-            }
-        } else {
-            if ($prevId) {
-                $prevNode = Craft::$app->getElements()->getElementById($prevId);
-                Craft::$app->getStructures()->moveAfter($structureId, $node, $prevNode);
-            } else {
-                Craft::$app->getStructures()->prependToRoot($structureId, $node);
-            }
+        $parent = $nodes->findNodeInMenu($menu, $parentId, $node->siteId);
+        $prevSibling = $nodes->findNodeInMenu($menu, $prevId, $node->siteId);
+
+        if (!$nodes->moveNode($menu, $node, $parent, $prevSibling)) {
+            return $this->asFailure(Craft::t('free-nav', 'Couldn\'t move node.'));
         }
 
         return $this->asSuccess();
+    }
+
+    /**
+     * A node only has rows for the sites its menu propagates to, so look it up across
+     * all sites rather than against whichever site the CP happens to be on.
+     */
+    private function _getNode(mixed $nodeId): ?Node
+    {
+        return Node::find()
+            ->id($nodeId)
+            ->siteId('*')
+            ->unique()
+            ->preferSites([Craft::$app->getSites()->getCurrentSite()->id])
+            ->status(null)
+            ->one();
     }
 }

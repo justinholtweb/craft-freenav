@@ -10,6 +10,7 @@ use craft\models\FieldLayout;
 use craft\models\Structure;
 use justinholt\freenav\elements\Node;
 use justinholt\freenav\events\MenuEvent;
+use justinholt\freenav\FreeNav;
 use justinholt\freenav\models\Menu;
 use justinholt\freenav\models\MenuSiteSettings;
 use justinholt\freenav\records\MenuRecord;
@@ -355,15 +356,33 @@ class Menus extends Component
 
         $this->saveMenu($newMenu);
 
-        // Duplicate nodes
-        $nodes = Node::find()->menuId($menu->id)->status(null)->all();
+        // Duplicate nodes, keeping them nested the same way. The source nodes come back
+        // in structure order, so a level stack is enough to find each one's new parent.
+        $nodes = Node::find()
+            ->menuId($menu->id)
+            ->siteId('*')
+            ->unique()
+            ->status(null)
+            ->orderBy(['lft' => SORT_ASC])
+            ->all();
+
+        $nodesService = FreeNav::getInstance()->getNodes();
+        $stack = []; // [newNode, level]
+
         foreach ($nodes as $node) {
+            $level = $node->level ?? 1;
+
+            while (!empty($stack) && $stack[count($stack) - 1][1] >= $level) {
+                array_pop($stack);
+            }
+
             $newNode = new Node();
             $newNode->menuId = $newMenu->id;
+            $newNode->siteId = $node->siteId;
             $newNode->title = $node->title;
             $newNode->nodeType = $node->nodeType;
             $newNode->linkedElementId = $node->linkedElementId;
-            $newNode->url = $node->url;
+            $newNode->customUrl = $node->customUrl;
             $newNode->classes = $node->classes;
             $newNode->urlSuffix = $node->urlSuffix;
             $newNode->customAttributes = $node->customAttributes;
@@ -374,7 +393,14 @@ class Menus extends Component
             $newNode->visibilityRules = $node->visibilityRules;
             $newNode->enabled = $node->enabled;
 
-            Craft::$app->getElements()->saveElement($newNode);
+            if (!Craft::$app->getElements()->saveElement($newNode)) {
+                continue;
+            }
+
+            $parent = !empty($stack) ? $stack[count($stack) - 1][0] : null;
+            $nodesService->placeNode($newMenu, $newNode, $parent);
+
+            $stack[] = [$newNode, $level];
         }
 
         return $newMenu;

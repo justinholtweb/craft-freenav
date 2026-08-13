@@ -76,7 +76,7 @@ class Nodes extends Component
 
             if ($url) {
                 $node->nodeType = NodeType::Custom->value;
-                $node->url = $url;
+                $node->customUrl = $url;
                 $node->linkedElementId = null;
                 Craft::$app->getElements()->saveElement($node, false);
             } else {
@@ -124,7 +124,8 @@ class Nodes extends Component
             $node->title = $nodeData['title'] ?? '';
             $node->nodeType = $nodeData['nodeType'] ?? NodeType::Custom->value;
             $node->linkedElementId = $nodeData['linkedElementId'] ?? null;
-            $node->url = $nodeData['url'] ?? null;
+            // 'url' is accepted for backwards compatibility with older exports
+            $node->customUrl = $nodeData['customUrl'] ?? $nodeData['url'] ?? null;
             $node->classes = $nodeData['classes'] ?? null;
             $node->urlSuffix = $nodeData['urlSuffix'] ?? null;
             $node->customAttributes = $nodeData['customAttributes'] ?? null;
@@ -154,30 +155,94 @@ class Nodes extends Component
             }
 
             if (Craft::$app->getElements()->saveElement($node)) {
-                // Add to structure
-                $structure = Craft::$app->getStructures()->getStructureById($menu->structureId);
-                if ($structure) {
-                    $parentId = $nodeData['parentId'] ?? null;
-                    if ($parentId) {
-                        $parentNode = Craft::$app->getElements()->getElementById($parentId);
-                        if ($parentNode) {
-                            Craft::$app->getStructures()->append($structure->id, $node, $parentNode);
-                        } else {
-                            Craft::$app->getStructures()->appendToRoot($structure->id, $node);
-                        }
-                    } else {
-                        if ($menu->defaultPlacement === 'beginning') {
-                            Craft::$app->getStructures()->prependToRoot($structure->id, $node);
-                        } else {
-                            Craft::$app->getStructures()->appendToRoot($structure->id, $node);
-                        }
-                    }
-                }
+                $parent = $this->findNodeInMenu($menu, $nodeData['parentId'] ?? null, $node->siteId);
+                $this->placeNode($menu, $node, $parent);
 
                 $nodes[] = $node;
             }
         }
 
         return $nodes;
+    }
+
+    /**
+     * Places a newly created node in its menu's structure, under $parent if given.
+     */
+    public function placeNode(Menu $menu, Node $node, ?Node $parent = null): bool
+    {
+        if (!$menu->structureId) {
+            return false;
+        }
+
+        $structures = Craft::$app->getStructures();
+
+        if ($parent) {
+            return $structures->append($menu->structureId, $node, $parent);
+        }
+
+        if ($menu->defaultPlacement === 'beginning') {
+            return $structures->prependToRoot($menu->structureId, $node);
+        }
+
+        return $structures->appendToRoot($menu->structureId, $node);
+    }
+
+    /**
+     * Moves a node within its menu's structure, under $parent and after $prevSibling.
+     */
+    public function moveNode(Menu $menu, Node $node, ?Node $parent = null, ?Node $prevSibling = null): bool
+    {
+        if (!$menu->structureId) {
+            return false;
+        }
+
+        $structures = Craft::$app->getStructures();
+
+        if ($prevSibling) {
+            return $structures->moveAfter($menu->structureId, $node, $prevSibling);
+        }
+
+        if ($parent) {
+            return $structures->prepend($menu->structureId, $node, $parent);
+        }
+
+        return $structures->prependToRoot($menu->structureId, $node);
+    }
+
+    /**
+     * Resolves a node ID to a node in the given menu.
+     *
+     * Node hierarchy is site-agnostic (it lives in the menu's structure), but a node
+     * only has rows for the sites its menu propagates to. Looking one up against the
+     * current site would miss nodes that live on another site, so search all sites and
+     * prefer $preferSiteId.
+     */
+    public function findNodeInMenu(Menu $menu, mixed $nodeId, ?int $preferSiteId = null): ?Node
+    {
+        if (!$nodeId) {
+            return null;
+        }
+
+        $query = Node::find()
+            ->id($nodeId)
+            ->menuId($menu->id)
+            ->siteId('*')
+            ->unique()
+            ->status(null);
+
+        if ($preferSiteId) {
+            $query->preferSites([$preferSiteId]);
+        }
+
+        $node = $query->one();
+
+        if (!$node) {
+            Craft::warning(
+                "Node $nodeId was not found in menu \"$menu->handle\".",
+                __METHOD__,
+            );
+        }
+
+        return $node;
     }
 }
