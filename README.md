@@ -471,7 +471,7 @@ Event::on(
 
 ## Support
 
-- [GitHub Issues](https://github.com/justinholtweb/craft-free-nav/issues)
+- [GitHub Issues](https://github.com/justinholtweb/craft-freenav/issues)
 - [Documentation](https://craft-freenav.com/docs)
 
 ---

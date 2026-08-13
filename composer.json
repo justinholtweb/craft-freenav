@@ -12,8 +12,8 @@
     }
   ],
   "support": {
-    "issues": "https://github.com/justinholtweb/craft-free-nav/issues",
-    "source": "https://github.com/justinholtweb/craft-free-nav",
+    "issues": "https://github.com/justinholtweb/craft-freenav/issues",
+    "source": "https://github.com/justinholtweb/craft-freenav",
     "docs": "https://craft-freenav.com/docs"
   },
   "require": {
