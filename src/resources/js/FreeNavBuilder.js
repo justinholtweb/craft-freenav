@@ -24,6 +24,13 @@
             this.maxNodes = builder.dataset.maxNodes ? parseInt(builder.dataset.maxNodes) : null;
             this.siteId = builder.dataset.siteId;
 
+            const siteSelect = document.getElementById('freenav-site');
+            if (siteSelect) {
+                siteSelect.addEventListener('change', () => {
+                    window.location.href = siteSelect.value;
+                });
+            }
+
             this._bindAddNode();
             this._bindEditNodes();
             this._bindDeleteNodes();

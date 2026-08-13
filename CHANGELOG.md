@@ -1,5 +1,23 @@
 # Changelog
 
+## 5.1.1 - 2026-08-13
+
+### Fixed
+- Fixed the node builder always operating on the primary site, whatever the site selector said. Craft doesn't apply `?site=` to the current site on control panel requests — `Cp::requestedSite()` does — so on a menu that isn't enabled for the primary site every save failed with "Attempting to save an element in an unsupported site", and menus whose nodes live on another site showed up empty.
+- The builder now redirects to a site the menu is actually enabled for, and shows a site selector when a menu is enabled for more than one.
+- Fixed `propagationMethod` doing nothing. It was stored, validated, exposed in the CP, exported and migrated, but `Node::getSupportedSites()` never read it, so nodes propagated to every enabled site no matter the setting. All four methods (`none`, `siteGroup`, `language`, `all`) now apply. See **Changed** below.
+- Fixed management operations silently doing nothing for menus whose nodes live outside the current site: JSON export wrote an empty node list, `resave-nodes` and the console menu listing reported 0 nodes, the max-nodes limit went unenforced, and deleting a menu left its nodes behind as orphans.
+- Fixed node title syncing following the request's site instead of the saved element's, so only one site's nodes picked up a retitled element.
+- Adding a node to a site its menu isn't enabled for now fails with a message naming the menu and site, instead of an uncaught exception.
+
+### Changed
+- Menus set to a propagation method other than "all" will stop propagating *new* saves to sites the method excludes. Existing rows are left as they are — nothing is deleted — so a menu that had been propagating everywhere keeps the nodes it already has.
+- `Nodes::getNodesByMenuId()` and `Nodes::getParentOptions()` take an optional `$siteId`.
+
+### Added
+- `Nodes::findNodesInMenu()` — every node in a menu, once each, across all sites. Use it for management operations; rendering stays scoped to the current site.
+- `Menu::getEnabledSiteIds()` and `Menu::isEnabledForSite()`.
+
 ## 5.1.0 - 2026-08-13
 
 ### Fixed

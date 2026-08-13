@@ -3,6 +3,7 @@
 namespace justinholt\freenav\controllers;
 
 use Craft;
+use craft\helpers\Cp;
 use craft\helpers\Json;
 use craft\helpers\UrlHelper;
 use craft\web\Controller;
@@ -12,6 +13,7 @@ use justinholt\freenav\FreeNav;
 use justinholt\freenav\helpers\NodeHelper;
 use justinholt\freenav\models\Menu;
 use justinholt\freenav\models\MenuSiteSettings;
+use yii\web\ForbiddenHttpException;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
@@ -155,13 +157,43 @@ class MenusController extends Controller
             throw new NotFoundHttpException('Menu not found');
         }
 
+        // Craft doesn't apply ?site= to the current site on CP requests — Cp::requestedSite()
+        // is what honors it. Everything on this page has to work off that site, not the
+        // current one, or the builder silently operates on the primary site.
+        $site = Cp::requestedSite();
+
+        if (!$site) {
+            throw new ForbiddenHttpException('User not authorized to edit content in any sites.');
+        }
+
+        $sitesService = Craft::$app->getSites();
+        $enabledSiteIds = $menu->getEnabledSiteIds();
+
+        // Nodes can only be saved to sites the menu is enabled for, so don't let the
+        // builder run on any other site — send it to one the menu actually supports
+        if (!in_array($site->id, $enabledSiteIds, true)) {
+            $fallbackSite = $sitesService->getSiteById(reset($enabledSiteIds));
+
+            if (!$fallbackSite || $fallbackSite->id === $site->id) {
+                throw new NotFoundHttpException('Menu not found');
+            }
+
+            return $this->redirect(UrlHelper::cpUrl("free-nav/menus/$menuId/build", ['site' => $fallbackSite->handle]));
+        }
+
         $this->view->registerAssetBundle(FreeNavAsset::class);
 
-        $nodes = FreeNav::getInstance()->getNodes()->getNodesByMenuId($menuId);
+        $nodesService = FreeNav::getInstance()->getNodes();
+        $nodes = $nodesService->getNodesByMenuId($menuId, $site->id);
         $nodeTypes = FreeNav::getInstance()->getNodeTypes()->getTypeOptions();
-        $parentOptions = FreeNav::getInstance()->getNodes()->getParentOptions($menu);
+        $parentOptions = $nodesService->getParentOptions($menu, null, $site->id);
 
         $parentMap = NodeHelper::buildParentMap($nodes);
+
+        $menuSites = array_values(array_filter(array_map(
+            fn(int $siteId) => $sitesService->getSiteById($siteId),
+            $enabledSiteIds,
+        )));
 
         return $this->renderTemplate('free-nav/menus/_build', [
             'menu' => $menu,
@@ -169,6 +201,8 @@ class MenusController extends Controller
             'nodeTypes' => $nodeTypes,
             'parentOptions' => $parentOptions,
             'parentMap' => $parentMap,
+            'site' => $site,
+            'menuSites' => $menuSites,
             'title' => $menu->name,
         ]);
     }

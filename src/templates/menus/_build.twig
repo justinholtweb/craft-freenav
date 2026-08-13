@@ -28,6 +28,20 @@
 {% endblock %}
 
 {% block content %}
+    {% if menuSites | length > 1 %}
+        <div class="freenav-site-select">
+            <label for="freenav-site">{{ 'Site'|t('app') }}</label>
+            <div class="select">
+                <select id="freenav-site">
+                    {% for menuSite in menuSites %}
+                        <option value="{{ url('free-nav/menus/' ~ menu.id ~ '/build', { site: menuSite.handle }) }}"
+                                {{ menuSite.id == site.id ? 'selected' }}>{{ menuSite.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+    {% endif %}
+
     {% if menu.instructions %}
         <div class="field">
             <div class="instructions">
@@ -40,7 +54,7 @@
          data-menu-id="{{ menu.id }}"
          data-max-levels="{{ menu.maxLevels ?? '' }}"
          data-max-nodes="{{ menu.maxNodes ?? '' }}"
-         data-site-id="{{ craft.app.sites.currentSite.id }}">
+         data-site-id="{{ site.id }}">
 
         {% if nodes | length %}
             <div class="freenav-nodes">

@@ -12,10 +12,28 @@ use yii\base\Component;
 
 class Nodes extends Component
 {
-    public function getNodesByMenuId(int $menuId): array
+    /**
+     * Every node in a menu, once each, regardless of which sites it lives in.
+     *
+     * Management operations (export, delete, resave, counts) have to span sites: a
+     * menu enabled only for a non-primary site has no nodes on the current site, so a
+     * site-scoped query silently returns nothing. Rendering stays site-scoped.
+     */
+    public function findNodesInMenu(int $menuId): NodeQuery
     {
         return Node::find()
             ->menuId($menuId)
+            ->siteId('*')
+            ->unique()
+            ->status(null)
+            ->orderBy(['lft' => SORT_ASC]);
+    }
+
+    public function getNodesByMenuId(int $menuId, ?int $siteId = null): array
+    {
+        return Node::find()
+            ->menuId($menuId)
+            ->siteId($siteId)
             ->status(null)
             ->orderBy(['lft' => SORT_ASC])
             ->all();
@@ -41,6 +59,7 @@ class Nodes extends Component
     {
         $nodes = Node::find()
             ->linkedElementId($element->id)
+            ->siteId($element->siteId)
             ->status(null)
             ->all();
 
@@ -67,6 +86,8 @@ class Nodes extends Component
     {
         $nodes = Node::find()
             ->linkedElementId($element->id)
+            ->siteId('*')
+            ->unique()
             ->status(null)
             ->all();
 
@@ -87,7 +108,7 @@ class Nodes extends Component
         }
     }
 
-    public function getParentOptions(Menu $menu, ?Node $exclude = null): array
+    public function getParentOptions(Menu $menu, ?Node $exclude = null, ?int $siteId = null): array
     {
         $options = [
             ['label' => '—', 'value' => ''],
@@ -95,6 +116,7 @@ class Nodes extends Component
 
         $nodes = Node::find()
             ->menuId($menu->id)
+            ->siteId($siteId)
             ->status(null)
             ->orderBy(['lft' => SORT_ASC])
             ->all();
@@ -136,8 +158,9 @@ class Nodes extends Component
             $node->visibilityRules = $nodeData['visibilityRules'] ?? null;
             $node->enabled = $nodeData['enabled'] ?? true;
 
-            // Set site
-            $node->siteId = $nodeData['siteId'] ?? Craft::$app->getSites()->getCurrentSite()->id;
+            // Set site. Nodes can only be saved to sites the menu is enabled for, so
+            // fall back to one of those rather than whatever site the request is on.
+            $node->siteId = $nodeData['siteId'] ?? $this->getDefaultSiteId($menu);
 
             // If element-linked, auto-set title from element
             if ($node->linkedElementId && empty($node->title)) {
@@ -244,5 +267,22 @@ class Nodes extends Component
         }
 
         return $node;
+    }
+
+    /**
+     * The site a new node should be created on: the current site when the menu is
+     * enabled for it, otherwise the menu's first enabled site.
+     */
+    public function getDefaultSiteId(Menu $menu): int
+    {
+        $currentSiteId = Craft::$app->getSites()->getCurrentSite()->id;
+
+        if ($menu->isEnabledForSite($currentSiteId)) {
+            return $currentSiteId;
+        }
+
+        $enabledSiteIds = $menu->getEnabledSiteIds();
+
+        return reset($enabledSiteIds);
     }
 }

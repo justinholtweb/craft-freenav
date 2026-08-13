@@ -6,7 +6,6 @@ use Craft;
 use craft\db\Query;
 use craft\helpers\Json;
 use craft\web\Controller;
-use justinholt\freenav\elements\Node;
 use justinholt\freenav\FreeNav;
 use justinholt\freenav\models\Menu;
 use justinholt\freenav\models\MenuSiteSettings;
@@ -24,11 +23,7 @@ class ImportExportController extends Controller
             throw new NotFoundHttpException('Menu not found');
         }
 
-        $nodes = Node::find()
-            ->menuId($menuId)
-            ->status(null)
-            ->orderBy(['lft' => SORT_ASC])
-            ->all();
+        $nodes = FreeNav::getInstance()->getNodes()->findNodesInMenu($menuId)->all();
 
         $exportData = [
             'freeNav' => '1.1.0',

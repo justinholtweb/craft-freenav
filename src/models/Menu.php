@@ -52,6 +52,35 @@ class Menu extends Model
         return Propagation::from($this->propagationMethod);
     }
 
+    /**
+     * The IDs of the sites this menu is enabled for, in site order.
+     *
+     * @return int[]
+     */
+    public function getEnabledSiteIds(): array
+    {
+        $sitesService = Craft::$app->getSites();
+        $enabled = [];
+
+        foreach ($this->getSiteSettings() as $siteSettings) {
+            if ($siteSettings->enabled && $siteSettings->siteId && $sitesService->getSiteById($siteSettings->siteId)) {
+                $enabled[] = $siteSettings->siteId;
+            }
+        }
+
+        // A menu with no site settings at all is treated as a primary-site menu
+        if (empty($enabled)) {
+            $enabled[] = $sitesService->getPrimarySite()->id;
+        }
+
+        return $enabled;
+    }
+
+    public function isEnabledForSite(int $siteId): bool
+    {
+        return in_array($siteId, $this->getEnabledSiteIds(), true);
+    }
+
     public function getFieldLayout(): ?FieldLayout
     {
         if ($this->_fieldLayout !== null) {

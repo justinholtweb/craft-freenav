@@ -14,6 +14,7 @@ use craft\helpers\Template;
 use craft\helpers\UrlHelper;
 use justinholt\freenav\elements\db\NodeQuery;
 use justinholt\freenav\enums\NodeType as NodeTypeEnum;
+use justinholt\freenav\enums\Propagation;
 use justinholt\freenav\events\NodeActiveEvent;
 use justinholt\freenav\FreeNav;
 use justinholt\freenav\gql\interfaces\NodeInterface;
@@ -517,25 +518,47 @@ class Node extends Element
     public function getSupportedSites(): array
     {
         $menu = $this->getMenu();
-        $siteSettings = $menu->getSiteSettings();
+        $sitesService = Craft::$app->getSites();
+        $enabledSiteIds = $menu->getEnabledSiteIds();
+        $siteId = $this->siteId ?? $sitesService->getCurrentSite()->id;
+        $site = $sitesService->getSiteById($siteId);
 
         $sites = [];
-        foreach ($siteSettings as $siteSetting) {
-            if ($siteSetting->enabled) {
+
+        foreach ($enabledSiteIds as $enabledSiteId) {
+            $enabledSite = $sitesService->getSiteById($enabledSiteId);
+
+            if (!$enabledSite) {
+                continue;
+            }
+
+            $include = match ($menu->getPropagationMethod()) {
+                Propagation::None => $enabledSiteId === $siteId,
+                Propagation::SiteGroup => $enabledSite->groupId === $site?->groupId,
+                Propagation::Language => $enabledSite->language === $site?->language,
+                Propagation::All => true,
+            };
+
+            if ($include) {
                 $sites[] = [
-                    'siteId' => $siteSetting->siteId,
+                    'siteId' => $enabledSiteId,
                     'propagate' => true,
                     'enabledByDefault' => true,
                 ];
             }
         }
 
+        // Nothing matched, which means the node's own site isn't one the menu is enabled
+        // for. Report the menu's sites so Craft raises its "unsupported site" error
+        // against the real list rather than silently saving somewhere unexpected.
         if (empty($sites)) {
-            $sites[] = [
-                'siteId' => Craft::$app->getSites()->getPrimarySite()->id,
-                'propagate' => true,
-                'enabledByDefault' => true,
-            ];
+            foreach ($enabledSiteIds as $enabledSiteId) {
+                $sites[] = [
+                    'siteId' => $enabledSiteId,
+                    'propagate' => true,
+                    'enabledByDefault' => true,
+                ];
+            }
         }
 
         return $sites;

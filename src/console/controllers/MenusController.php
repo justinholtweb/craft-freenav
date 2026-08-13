@@ -25,7 +25,7 @@ class MenusController extends Controller
         $this->stdout(str_repeat('-', 60) . "\n");
 
         foreach ($menus as $menu) {
-            $nodeCount = Node::find()->menuId($menu->id)->count();
+            $nodeCount = FreeNav::getInstance()->getNodes()->findNodesInMenu($menu->id)->count();
             $this->stdout(sprintf(
                 "  %-30s %-20s %d nodes\n",
                 $menu->name,
@@ -46,9 +46,9 @@ class MenusController extends Controller
                 return ExitCode::UNSPECIFIED_ERROR;
             }
 
-            $nodes = Node::find()->menuId($menu->id)->status(null)->all();
+            $nodes = FreeNav::getInstance()->getNodes()->findNodesInMenu($menu->id)->all();
         } else {
-            $nodes = Node::find()->status(null)->all();
+            $nodes = Node::find()->siteId('*')->unique()->status(null)->all();
         }
 
         $count = count($nodes);

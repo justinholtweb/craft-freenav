@@ -3,6 +3,7 @@
 namespace justinholt\freenav\controllers;
 
 use Craft;
+use craft\errors\UnsupportedSiteException;
 use craft\helpers\Cp;
 use craft\helpers\Json;
 use craft\web\Controller;
@@ -30,7 +31,7 @@ class NodesController extends Controller
 
         // Check max nodes
         if ($menu->maxNodes) {
-            $currentCount = Node::find()->menuId($menuId)->status(null)->count();
+            $currentCount = FreeNav::getInstance()->getNodes()->findNodesInMenu($menuId)->count();
             if ($currentCount >= $menu->maxNodes) {
                 return $this->asFailure(Craft::t('free-nav', 'Maximum number of nodes ({max}) reached.', [
                     'max' => $menu->maxNodes,
@@ -43,7 +44,16 @@ class NodesController extends Controller
             $nodeData = Json::decodeIfJson($nodeData) ?: [];
         }
 
-        $nodes = FreeNav::getInstance()->getNodes()->addNodes($menu, [$nodeData]);
+        try {
+            $nodes = FreeNav::getInstance()->getNodes()->addNodes($menu, [$nodeData]);
+        } catch (UnsupportedSiteException $e) {
+            $site = Craft::$app->getSites()->getSiteById($e->siteId);
+
+            return $this->asFailure(Craft::t('free-nav', '“{menu}” isn\'t enabled for the {site} site. Enable it in the menu\'s settings, or switch sites.', [
+                'menu' => $menu->name,
+                'site' => $site->name ?? $e->siteId,
+            ]));
+        }
 
         if (empty($nodes)) {
             return $this->asFailure(Craft::t('free-nav', 'Couldn\'t add node.'));
@@ -232,7 +242,7 @@ class NodesController extends Controller
             $exclude = $this->_getNode($excludeNodeId);
         }
 
-        $options = FreeNav::getInstance()->getNodes()->getParentOptions($menu, $exclude);
+        $options = FreeNav::getInstance()->getNodes()->getParentOptions($menu, $exclude, $this->_requestedSiteId());
 
         return $this->asJson(['options' => $options]);
     }
@@ -296,8 +306,17 @@ class NodesController extends Controller
             ->id($nodeId)
             ->siteId('*')
             ->unique()
-            ->preferSites([Craft::$app->getSites()->getCurrentSite()->id])
+            ->preferSites([$this->_requestedSiteId()])
             ->status(null)
             ->one();
+    }
+
+    /**
+     * The site the builder is working in. Craft doesn't apply ?site= to the current
+     * site on CP requests, so this has to go through Cp::requestedSite().
+     */
+    private function _requestedSiteId(): int
+    {
+        return Cp::requestedSite()?->id ?? Craft::$app->getSites()->getCurrentSite()->id;
     }
 }

@@ -253,7 +253,7 @@ class Menus extends Component
         }
 
         // Soft delete nodes
-        $nodes = Node::find()->menuId($menu->id)->status(null)->all();
+        $nodes = FreeNav::getInstance()->getNodes()->findNodesInMenu($menu->id)->all();
         foreach ($nodes as $node) {
             $node->deletedWithMenu = true;
             Craft::$app->getElements()->deleteElement($node);
@@ -283,7 +283,7 @@ class Menus extends Component
 
         try {
             // Delete nodes
-            $nodes = Node::find()->menuId($record->id)->status(null)->all();
+            $nodes = FreeNav::getInstance()->getNodes()->findNodesInMenu($record->id)->all();
             foreach ($nodes as $node) {
                 Craft::$app->getElements()->deleteElement($node, true);
             }

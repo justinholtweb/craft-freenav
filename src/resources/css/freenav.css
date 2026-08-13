@@ -249,3 +249,15 @@
     vertical-align: middle;
     margin-left: 4px;
 }
+
+.freenav-site-select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.freenav-site-select label {
+    font-weight: 500;
+    color: var(--medium-text-color);
+}
