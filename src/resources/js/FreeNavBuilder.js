@@ -13,6 +13,7 @@
         maxLevels: null,
         maxNodes: null,
         siteId: null,
+        openPanelId: null,
         _loadedElementType: null,
 
         init: function() {
@@ -243,35 +244,52 @@
         },
 
         _bindPanels: function() {
-            // Close panels with Escape
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') {
-                    this._hidePanel('freenav-add-panel');
-                    this._hidePanel('freenav-edit-panel');
-                }
-            });
+            // Escape is handled per-panel through Garnish's UI layer manager in
+            // _showPanel(), so it only closes the topmost layer — a Craft modal opened
+            // from inside a panel gets it first.
         },
 
         _showPanel: function(panelId) {
             const panel = document.getElementById(panelId);
-            if (panel) {
-                panel.classList.remove('hidden');
-                requestAnimationFrame(() => {
-                    panel.classList.add('visible');
+            if (!panel) return;
+
+            this.openPanelId = panelId;
+            this._showOverlay();
+
+            // Craft stacks modals, HUDs and slideouts at one z-index and relies on DOM
+            // order, so the panel has to sit at the end of <body> — above the page, and
+            // below any Craft modal opened after it.
+            document.body.appendChild(panel);
+
+            panel.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                panel.classList.add('visible');
+            });
+
+            if (window.Garnish) {
+                Garnish.uiLayerManager.addLayer(panel);
+                Garnish.uiLayerManager.registerShortcut(Garnish.ESC_KEY, () => {
+                    this._hidePanel(panelId);
                 });
             }
-
-            this._showOverlay();
         },
 
         _hidePanel: function(panelId) {
             const panel = document.getElementById(panelId);
-            if (panel) {
-                panel.classList.remove('visible');
-                setTimeout(() => {
-                    panel.classList.add('hidden');
-                }, 250);
+            if (!panel) return;
+
+            if (window.Garnish) {
+                Garnish.uiLayerManager.removeLayer(panel);
             }
+
+            if (this.openPanelId === panelId) {
+                this.openPanelId = null;
+            }
+
+            panel.classList.remove('visible');
+            setTimeout(() => {
+                panel.classList.add('hidden');
+            }, 250);
 
             this._hideOverlay();
         },
@@ -282,14 +300,30 @@
                 overlay = document.createElement('div');
                 overlay.className = 'freenav-panel-overlay';
                 overlay.addEventListener('click', () => {
-                    this._hidePanel('freenav-add-panel');
-                    this._hidePanel('freenav-edit-panel');
+                    // Only dismiss when the panel is the topmost layer. Craft's own
+                    // shade covers this overlay while a modal is open, but don't rely
+                    // on paint order alone to decide whether the click was ours.
+                    if (this.openPanelId && this._panelIsTopLayer()) {
+                        this._hidePanel(this.openPanelId);
+                    }
                 });
-                document.body.appendChild(overlay);
             }
+            // Re-append so the overlay stays directly beneath the panel
+            document.body.appendChild(overlay);
             requestAnimationFrame(() => {
                 overlay.classList.add('visible');
             });
+        },
+
+        _panelIsTopLayer: function() {
+            if (!window.Garnish) {
+                return true;
+            }
+
+            const panel = document.getElementById(this.openPanelId);
+            const $container = Garnish.uiLayerManager.currentLayer.$container;
+
+            return !!panel && !!$container && $container.get(0) === panel;
         },
 
         _hideOverlay: function() {

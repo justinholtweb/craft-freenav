@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.1.2 - 2026-08-13
+
+### Fixed
+- Fixed the add/edit node panel closing when you dismissed a Craft element selector opened from inside it. The panel hand-rolled its own stacking and dismissal: its overlay sat above Craft's modal shade and swallowed the click, and its Escape handler was bound to the document, so both fired for interactions that belonged to the modal.
+- Fixed Craft's element selector rendering *behind* the panel, which covered the modal's Select button. Panels now sit on Craft's z-index for modals and slideouts and order themselves by position in `<body>`, so a modal opened from a panel stacks above it.
+- Panels now register as Garnish UI layers, so Escape closes the topmost thing — the element selector first, then the panel — the way the rest of the control panel behaves.
+
 ## 5.1.1 - 2026-08-13
 
 ### Fixed
