@@ -1,5 +1,15 @@
 # Changelog
 
+## 5.1.3 - 2026-08-18
+
+### Fixed
+- Fixed the menu listing reporting "0 nodes" for menus that have nodes. The count ran `craft.freenav.nodes(handle).count()` with the element query's defaults, which meant enabled nodes on the request's current site — so a menu whose nodes live on another site counted nothing, and disabled nodes never counted anywhere. It now counts what the builder lists: every node in the menu, disabled ones included, on the site the "Nodes" link goes to.
+- The listing's "Nodes" and "Build" links now carry the site the count was taken on, so the page they open matches the number next to them.
+- Fixed the GitHub URLs in `composer.json` and the README, which pointed at `craft-free-nav` and 404'd. The support links render in the Craft Plugin Store listing.
+
+### Added
+- `Nodes::getNodeCount()` — a menu's node count for one site, disabled nodes included.
+
 ## 5.1.2 - 2026-08-13
 
 ### Fixed

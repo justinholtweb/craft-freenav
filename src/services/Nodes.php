@@ -39,6 +39,20 @@ class Nodes extends Component
             ->all();
     }
 
+    /**
+     * Counts a menu's nodes the way the builder lists them: every node in the menu on
+     * one site, disabled ones included. Leaving the defaults in place would count only
+     * enabled nodes on whatever site the request happens to be on.
+     */
+    public function getNodeCount(int $menuId, ?int $siteId = null): int
+    {
+        return (int)Node::find()
+            ->menuId($menuId)
+            ->siteId($siteId)
+            ->status(null)
+            ->count();
+    }
+
     public function getNodesByMenuHandle(string $handle, array $criteria = []): NodeQuery
     {
         $query = Node::find()

@@ -33,13 +33,13 @@
                             </td>
                             <td class="code">{{ menu.handle }}</td>
                             <td>
-                                {% set nodeCount = craft.freenav.nodes(menu.handle).count() %}
-                                <a href="{{ url('free-nav/menus/' ~ menu.id ~ '/build') }}">
+                                {% set nodeCount = nodeCounts[menu.id] ?? 0 %}
+                                <a href="{{ buildUrls[menu.id] }}">
                                     {{ '{count} nodes'|t('free-nav', { count: nodeCount }) }}
                                 </a>
                             </td>
                             <td class="thin">
-                                <a href="{{ url('free-nav/menus/' ~ menu.id ~ '/build') }}"
+                                <a href="{{ buildUrls[menu.id] }}"
                                    class="btn small"
                                    title="{{ 'Build'|t('free-nav') }}">
                                     {{ 'Build'|t('free-nav') }}

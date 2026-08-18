@@ -22,9 +22,34 @@ class MenusController extends Controller
     public function actionIndex(): Response
     {
         $menus = FreeNav::getInstance()->getMenus()->getEditableMenus();
+        $nodesService = FreeNav::getInstance()->getNodes();
+        $sitesService = Craft::$app->getSites();
+        $requestedSite = Cp::requestedSite();
+
+        $nodeCounts = [];
+        $buildUrls = [];
+
+        foreach ($menus as $menu) {
+            // Nodes belong to a site, so the count has to name one. Use the same site the
+            // builder will land on — the requested one when the menu supports it, otherwise
+            // the menu's first site — or the count won't match the page it links to.
+            $enabledSiteIds = $menu->getEnabledSiteIds();
+            $siteId = $requestedSite && in_array($requestedSite->id, $enabledSiteIds, true)
+                ? $requestedSite->id
+                : reset($enabledSiteIds);
+            $site = $siteId ? $sitesService->getSiteById($siteId) : null;
+
+            $nodeCounts[$menu->id] = $nodesService->getNodeCount($menu->id, $site?->id);
+            $buildUrls[$menu->id] = UrlHelper::cpUrl(
+                "free-nav/menus/$menu->id/build",
+                $site ? ['site' => $site->handle] : []
+            );
+        }
 
         return $this->renderTemplate('free-nav/menus/_index', [
             'menus' => $menus,
+            'nodeCounts' => $nodeCounts,
+            'buildUrls' => $buildUrls,
         ]);
     }
 
