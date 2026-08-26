@@ -2,7 +2,7 @@
  # Footer Nav Preset
  # Renders navigation in column-based footer layout. Top-level items become column headers.
  #}
-{% set navId = options.id ?? 'freenav-' ~ menu.handle %}
+{% set navId = options.id ?? ('freenav-' ~ menu.handle) %}
 {% set navClass = options.class ?? 'freenav-footer' %}
 
 <nav id="{{ navId }}" class="{{ navClass }}" aria-label="{{ menu.name }}">

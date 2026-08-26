@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.1.4 - 2026-08-26
+
+### Fixed
+
+- **A caller-supplied `id` option produced a corrupted DOM id.** Twig's `??` binds tighter than `~`, so `options.id ?? 'freenav-' ~ menu.handle` parsed as `(options.id ?? 'freenav-') ~ menu.handle` — passing `{ id: 'main-nav' }` rendered `main-navprimary`. Fixed in all five navigation presets.
+
 ## 5.1.3 - 2026-08-18
 
 ### Fixed

@@ -2,7 +2,7 @@
  # Default Nav Preset
  # Renders a simple unordered list with proper ARIA attributes.
  #}
-{% set navId = options.id ?? 'freenav-' ~ menu.handle %}
+{% set navId = options.id ?? ('freenav-' ~ menu.handle) %}
 {% set navClass = options.class ?? '' %}
 {% set ulClass = options.ulClass ?? '' %}
 {% set liClass = options.liClass ?? '' %}

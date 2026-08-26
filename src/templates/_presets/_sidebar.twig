@@ -2,7 +2,7 @@
  # Sidebar Nav Preset
  # Renders navigation suited for sidebar placement with collapsible sections.
  #}
-{% set navId = options.id ?? 'freenav-' ~ menu.handle %}
+{% set navId = options.id ?? ('freenav-' ~ menu.handle) %}
 {% set navClass = options.class ?? 'freenav-sidebar' %}
 {% set activeClass = options.activeClass ?? 'active' %}
 {% set hasChildrenClass = options.hasChildrenClass ?? 'has-children' %}

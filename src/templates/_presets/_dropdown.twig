@@ -2,7 +2,7 @@
  # Dropdown Nav Preset
  # Renders navigation with dropdown submenus and proper ARIA for accessible dropdowns.
  #}
-{% set navId = options.id ?? 'freenav-' ~ menu.handle %}
+{% set navId = options.id ?? ('freenav-' ~ menu.handle) %}
 {% set navClass = options.class ?? 'freenav-dropdown' %}
 {% set activeClass = options.activeClass ?? 'active' %}
 {% set hasChildrenClass = options.hasChildrenClass ?? 'has-children' %}
