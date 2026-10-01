@@ -35,10 +35,18 @@ class Renderer extends Component
             'visibilityCheck' => true,
         ], $options);
 
+        // A query string would make every cache key unique — `?x=1`, `?x=2`… is an easy way to
+        // fill the cache — and those pages are rarely the ones worth caching, so render them fresh.
+        $request = Craft::$app->getRequest();
+
+        if (!$request->getIsConsoleRequest() && $request->getQueryStringWithoutPath() !== '') {
+            $options['cache'] = false;
+        }
+
         // Check cache
         if ($options['cache']) {
             $siteId = (string)Craft::$app->getSites()->getCurrentSite()->id;
-            $cacheKey = md5(json_encode($options));
+            $cacheKey = $this->_cacheKey($options);
             $cached = FreeNav::getInstance()->getMenuCache()->get($handle, $siteId, $cacheKey);
 
             if ($cached !== null) {
@@ -55,7 +63,7 @@ class Renderer extends Component
         // Store in cache
         if ($options['cache']) {
             $siteId = (string)Craft::$app->getSites()->getCurrentSite()->id;
-            $cacheKey = md5(json_encode($options));
+            $cacheKey = $this->_cacheKey($options);
             FreeNav::getInstance()->getMenuCache()->set(
                 $handle,
                 $siteId,
@@ -66,6 +74,32 @@ class Renderer extends Component
         }
 
         return Template::raw($html);
+    }
+
+    /**
+     * What the rendered HTML depends on, beyond the options: the page (active and current
+     * classes, URL-segment rules) and who is looking (logged-in and user-group rules).
+     *
+     * Until 5.1.5 the key was the options alone, so the first visitor's render was served to
+     * everyone — a menu rendered for a logged-in admin, members-only links included, went to
+     * anonymous visitors, and the active item was whatever page warmed the cache.
+     */
+    private function _cacheKey(array $options): string
+    {
+        $request = Craft::$app->getRequest();
+        $user = Craft::$app->getUser()->getIdentity();
+
+        $context = [
+            'options' => $options,
+            'url' => $request->getIsConsoleRequest() ? '' : $request->getHostInfo() . '/' . $request->getFullPath(),
+            'user' => $user ? ['in' => true, 'groups' => array_map(fn($group) => $group->id, $user->getGroups())] : ['in' => false],
+        ];
+
+        if ($user) {
+            sort($context['user']['groups']);
+        }
+
+        return md5(json_encode($context));
     }
 
     public function renderPreset(string $handle, Preset $preset, array $options = []): Markup

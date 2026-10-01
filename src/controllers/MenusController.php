@@ -19,6 +19,20 @@ use yii\web\Response;
 
 class MenusController extends Controller
 {
+    public function beforeAction($action): bool
+    {
+        if (!parent::beforeAction($action)) {
+            return false;
+        }
+
+        // Every action here is control-panel work. Until 5.1.5 none of them checked anything, so
+        // any signed-in user — a front-end member included — could post to them.
+        $this->requireCpRequest();
+        $this->requirePermission('accessPlugin-free-nav');
+
+        return true;
+    }
+
     public function actionIndex(): Response
     {
         $menus = FreeNav::getInstance()->getMenus()->getEditableMenus();
@@ -28,6 +42,9 @@ class MenusController extends Controller
 
         $nodeCounts = [];
         $buildUrls = [];
+        $manageable = [];
+        $user = Craft::$app->getUser()->getIdentity();
+        $menusService = FreeNav::getInstance()->getMenus();
 
         foreach ($menus as $menu) {
             // Nodes belong to a site, so the count has to name one. Use the same site the
@@ -40,6 +57,7 @@ class MenusController extends Controller
             $site = $siteId ? $sitesService->getSiteById($siteId) : null;
 
             $nodeCounts[$menu->id] = $nodesService->getNodeCount($menu->id, $site?->id);
+            $manageable[$menu->id] = $menusService->canManageMenu($user, $menu);
             $buildUrls[$menu->id] = UrlHelper::cpUrl(
                 "free-nav/menus/$menu->id/build",
                 $site ? ['site' => $site->handle] : []
@@ -50,6 +68,8 @@ class MenusController extends Controller
             'menus' => $menus,
             'nodeCounts' => $nodeCounts,
             'buildUrls' => $buildUrls,
+            'manageable' => $manageable,
+            'canCreate' => $menusService->canManageMenus($user),
         ]);
     }
 
@@ -68,6 +88,12 @@ class MenusController extends Controller
         }
 
         $isNew = !$menu->id;
+
+        if ($isNew) {
+            $this->_requireManageMenus();
+        } else {
+            $this->_requireManageMenu($menu);
+        }
 
         if (!$isNew) {
             $title = $menu->name;
@@ -117,9 +143,13 @@ class MenusController extends Controller
             if (!$menu) {
                 throw new NotFoundHttpException('Menu not found');
             }
+            $this->_requireManageMenu($menu);
         } else {
+            $this->_requireManageMenus();
             $menu = new Menu();
         }
+
+        $this->_requireAdminChanges();
 
         $menu->name = $request->getBodyParam('name', $menu->name);
         $menu->handle = $request->getBodyParam('handle', $menu->handle);
@@ -162,6 +192,9 @@ class MenusController extends Controller
         $this->requirePostRequest();
         $this->requireAcceptsJson();
 
+        $this->_requireManageMenus();
+        $this->_requireAdminChanges();
+
         $menuId = Craft::$app->getRequest()->getRequiredBodyParam('id');
         $menu = FreeNav::getInstance()->getMenus()->getMenuById($menuId);
 
@@ -180,6 +213,13 @@ class MenusController extends Controller
 
         if (!$menu) {
             throw new NotFoundHttpException('Menu not found');
+        }
+
+        $user = Craft::$app->getUser()->getIdentity();
+        $menus = FreeNav::getInstance()->getMenus();
+
+        if (!$menus->canManageMenu($user, $menu) && !$menus->canEditNodes($user, $menu)) {
+            throw new ForbiddenHttpException('User not authorized to build this menu.');
         }
 
         // Craft doesn't apply ?site= to the current site on CP requests — Cp::requestedSite()
@@ -229,6 +269,9 @@ class MenusController extends Controller
             'site' => $site,
             'menuSites' => $menuSites,
             'title' => $menu->name,
+            'canManageMenu' => $menus->canManageMenu($user, $menu),
+            'canEditNodes' => $menus->canEditNodes($user, $menu),
+            'canDeleteNodes' => $menus->canDeleteNodes($user, $menu),
         ]);
     }
 
@@ -236,6 +279,9 @@ class MenusController extends Controller
     {
         $this->requirePostRequest();
         $this->requireAcceptsJson();
+
+        $this->_requireManageMenus();
+        $this->_requireAdminChanges();
 
         $ids = Json::decode(Craft::$app->getRequest()->getRawBody())['ids'] ?? [];
 
@@ -247,6 +293,8 @@ class MenusController extends Controller
     public function actionDuplicate(): Response
     {
         $this->requirePostRequest();
+        $this->_requireManageMenus();
+        $this->_requireAdminChanges();
 
         $menuId = Craft::$app->getRequest()->getRequiredBodyParam('menuId');
         $menu = FreeNav::getInstance()->getMenus()->getMenuById($menuId);
@@ -264,6 +312,9 @@ class MenusController extends Controller
 
     public function actionSettings(): Response
     {
+        // Plugin settings are project config, the same as Craft's own settings screens.
+        $this->requireAdmin();
+
         $settings = FreeNav::getInstance()->getSettings();
 
         return $this->renderTemplate('free-nav/settings/_index', [
@@ -274,6 +325,7 @@ class MenusController extends Controller
     public function actionSaveSettings(): ?Response
     {
         $this->requirePostRequest();
+        $this->requireAdmin();
 
         $request = Craft::$app->getRequest();
         $settings = FreeNav::getInstance()->getSettings();
@@ -294,5 +346,32 @@ class MenusController extends Controller
         Craft::$app->getSession()->setNotice(Craft::t('free-nav', 'Settings saved.'));
 
         return $this->redirectToPostedUrl();
+    }
+
+    // -------------------------------------------------------------------------
+
+    private function _requireManageMenus(): void
+    {
+        if (!FreeNav::getInstance()->getMenus()->canManageMenus(Craft::$app->getUser()->getIdentity())) {
+            throw new ForbiddenHttpException('User not authorized to manage menus.');
+        }
+    }
+
+    private function _requireManageMenu(Menu $menu): void
+    {
+        if (!FreeNav::getInstance()->getMenus()->canManageMenu(Craft::$app->getUser()->getIdentity(), $menu)) {
+            throw new ForbiddenHttpException('User not authorized to manage this menu.');
+        }
+    }
+
+    /**
+     * Menus are project config, so like sections they can only change where admin changes are
+     * allowed — otherwise production drifts from what is deployed.
+     */
+    private function _requireAdminChanges(): void
+    {
+        if (!Craft::$app->getConfig()->getGeneral()->allowAdminChanges) {
+            throw new ForbiddenHttpException('Menus can only be changed where admin changes are allowed.');
+        }
     }
 }

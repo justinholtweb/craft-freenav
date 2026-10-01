@@ -139,4 +139,11 @@ return [
 
     // Breadcrumbs
     'Breadcrumb' => 'Breadcrumb',
+    'Use a web address, a path, an anchor, or a mailto:, tel: or sms: link. Environment variables and aliases must resolve to an http(s) address.' => 'Use a web address, a path, an anchor, or a mailto:, tel: or sms: link. Environment variables and aliases must resolve to an http(s) address.',
+    'Create, edit and delete all menus' => 'Create, edit and delete all menus',
+    'Edit nodes in all menus' => 'Edit nodes in all menus',
+    'Delete nodes in all menus' => 'Delete nodes in all menus',
+    'Manage “{name}”' => 'Manage “{name}”',
+    'Edit nodes in “{name}”' => 'Edit nodes in “{name}”',
+    'Delete nodes in “{name}”' => 'Delete nodes in “{name}”',
 ];

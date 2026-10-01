@@ -263,45 +263,42 @@ class FreeNav extends Plugin
             UserPermissions::class,
             UserPermissions::EVENT_REGISTER_PERMISSIONS,
             function(RegisterUserPermissionsEvent $event) {
-                $menus = $this->getMenus()->getAllMenus();
+                // Craft discards a nested permission whose parent isn't granted. Until 5.1.5 the
+                // per-menu permissions were nested under the all-menus ones, so granting "edit
+                // nodes in Main" was impossible without granting "edit nodes" everywhere. The
+                // per-menu ones now stand on their own; names are unchanged, so existing grants
+                // still apply.
+                $permissions = [
+                    'freeNav-manageMenus' => [
+                        'label' => Craft::t('free-nav', 'Create, edit and delete all menus'),
+                    ],
+                    'freeNav-editNodes' => [
+                        'label' => Craft::t('free-nav', 'Edit nodes in all menus'),
+                        'nested' => [
+                            'freeNav-deleteNodes' => [
+                                'label' => Craft::t('free-nav', 'Delete nodes in all menus'),
+                            ],
+                        ],
+                    ],
+                ];
 
-                $menuPermissions = [];
-                foreach ($menus as $menu) {
-                    $menuPermissions['freeNav-manageMenu:' . $menu->uid] = [
-                        'label' => Craft::t('free-nav', 'Manage "{name}"', ['name' => $menu->name]),
+                foreach ($this->getMenus()->getAllMenus() as $menu) {
+                    $permissions['freeNav-manageMenu:' . $menu->uid] = [
+                        'label' => Craft::t('free-nav', 'Manage “{name}”', ['name' => $menu->name]),
                     ];
-                }
-
-                $editNodePermissions = [];
-                foreach ($menus as $menu) {
-                    $editNodePermissions['freeNav-editNodes:' . $menu->uid] = [
-                        'label' => Craft::t('free-nav', '"{name}"', ['name' => $menu->name]),
-                    ];
-                }
-
-                $deleteNodePermissions = [];
-                foreach ($menus as $menu) {
-                    $deleteNodePermissions['freeNav-deleteNodes:' . $menu->uid] = [
-                        'label' => Craft::t('free-nav', '"{name}"', ['name' => $menu->name]),
+                    $permissions['freeNav-editNodes:' . $menu->uid] = [
+                        'label' => Craft::t('free-nav', 'Edit nodes in “{name}”', ['name' => $menu->name]),
+                        'nested' => [
+                            'freeNav-deleteNodes:' . $menu->uid => [
+                                'label' => Craft::t('free-nav', 'Delete nodes in “{name}”', ['name' => $menu->name]),
+                            ],
+                        ],
                     ];
                 }
 
                 $event->permissions[] = [
                     'heading' => Craft::t('free-nav', 'FreeNav'),
-                    'permissions' => [
-                        'freeNav-manageMenus' => [
-                            'label' => Craft::t('free-nav', 'Manage menus'),
-                            'nested' => $menuPermissions,
-                        ],
-                        'freeNav-editNodes' => [
-                            'label' => Craft::t('free-nav', 'Edit nodes'),
-                            'nested' => $editNodePermissions,
-                        ],
-                        'freeNav-deleteNodes' => [
-                            'label' => Craft::t('free-nav', 'Delete nodes'),
-                            'nested' => $deleteNodePermissions,
-                        ],
-                    ],
+                    'permissions' => $permissions,
                 ];
             }
         );

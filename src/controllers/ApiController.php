@@ -50,14 +50,21 @@ class ApiController extends Controller
             throw new NotFoundHttpException('Menu not found');
         }
 
+        // Top level only — each node carries its own children. Until 5.1.5 every node was listed
+        // at the top level *and* inside its parent.
         $nodes = Node::find()
             ->menuHandle($handle)
+            ->level(1)
             ->status('enabled')
             ->all();
 
         $nodeData = [];
         foreach ($nodes as $node) {
-            $nodeData[] = $this->_serializeNode($node);
+            // The same visibility rules the rendered menu applies: a "members only" link is not
+            // for an anonymous API caller either.
+            if ($node->isVisible()) {
+                $nodeData[] = $this->_serializeNode($node);
+            }
         }
 
         return $this->asJson([
@@ -85,7 +92,7 @@ class ApiController extends Controller
     private function _serializeNode(Node $node): array
     {
         /** @var Node[] $childNodes */
-        $childNodes = $node->getChildren()->all();
+        $childNodes = array_filter($node->getChildren()->status('enabled')->all(), fn($child) => $child instanceof Node && $child->isVisible());
 
         return [
             'id' => $node->id,
@@ -101,10 +108,10 @@ class ApiController extends Controller
             'badge' => $node->badge,
             'active' => $node->isActive(),
             'enabled' => $node->enabled,
-            'children' => array_map(
+            'children' => array_values(array_map(
                 fn(Node $child) => $this->_serializeNode($child),
                 $childNodes
-            ),
+            )),
         ];
     }
 }

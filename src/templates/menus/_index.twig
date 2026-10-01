@@ -6,7 +6,7 @@
 {% set newMenuUrl = url('free-nav/menus/new') %}
 
 {% block actionButton %}
-    {% if currentUser.can('freeNav-manageMenus') or currentUser.admin %}
+    {% if canCreate and craft.app.config.general.allowAdminChanges %}
         <a href="{{ newMenuUrl }}" class="btn submit">{{ 'New menu'|t('free-nav') }}</a>
     {% endif %}
 {% endblock %}
@@ -27,7 +27,8 @@
                     {% for menu in menus %}
                         <tr data-id="{{ menu.id }}" data-name="{{ menu.name }}">
                             <td>
-                                <a href="{{ url('free-nav/menus/' ~ menu.id) }}">
+                                {# Someone who can only edit nodes goes straight to the builder. #}
+                                <a href="{{ manageable[menu.id] ?? false ? url('free-nav/menus/' ~ menu.id) : buildUrls[menu.id] }}">
                                     <strong>{{ menu.name }}</strong>
                                 </a>
                             </td>

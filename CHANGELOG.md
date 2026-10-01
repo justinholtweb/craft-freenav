@@ -1,5 +1,20 @@
 # Changelog
 
+## 5.1.5 - 2026-10-01
+
+### Security
+
+- **Every control panel action now checks permissions.** None did before, so any signed-in user — a front-end member included — could delete menus, edit or delete nodes, import menus or change the plugin settings by posting to the action URLs. Each action now needs a CP request, *Access FreeNav*, and the permission the README documents for it; changes to menu definitions also need `allowAdminChanges`, and plugin settings are admin-only.
+- **A custom URL can no longer run script or reveal a secret.** `javascript:` and other non-link schemes are refused when a node is saved and render as no link if already stored, and an environment variable or alias has to resolve to an `http(s)` address — `$CRAFT_SECURITY_KEY` used to be resolved and printed into every page's menu and the REST API.
+- **The REST API applies node visibility rules**, so a members-only link isn't returned to an anonymous caller.
+
+### Fixed
+
+- **Cached menus were served to everyone as the first visitor saw them.** The cache key was the render options alone, so with caching on (the default) a menu rendered for a logged-in user — members-only links included — went to anonymous visitors, and the active item was whichever page warmed the cache. Menus are now cached per page and per visitor type, and pages with a query string are rendered fresh.
+- **Per-menu permissions can be granted on their own.** They were nested under the all-menus permissions, and Craft discards a nested permission whose parent isn't granted — so "edit nodes in one menu" was impossible without "edit nodes everywhere". Names are unchanged; re-save a user's or group's permissions to pick up any that were dropped.
+- The REST API listed every node at the top level and again under its parent; it now returns the tree once.
+- The builder hides the add, edit, delete and export controls a user can't use, and someone who can only edit nodes goes straight to the builder from the menu listing.
+
 ## 5.1.4 - 2026-08-26
 
 ### Fixed

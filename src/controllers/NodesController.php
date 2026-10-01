@@ -9,12 +9,26 @@ use craft\helpers\Json;
 use craft\web\Controller;
 use justinholt\freenav\elements\Node;
 use justinholt\freenav\FreeNav;
+use justinholt\freenav\models\Menu;
 use yii\web\BadRequestHttpException;
+use yii\web\ForbiddenHttpException;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
 class NodesController extends Controller
 {
+    public function beforeAction($action): bool
+    {
+        if (!parent::beforeAction($action)) {
+            return false;
+        }
+
+        $this->requireCpRequest();
+        $this->requirePermission('accessPlugin-free-nav');
+
+        return true;
+    }
+
     public function actionAdd(): Response
     {
         $this->requirePostRequest();
@@ -28,6 +42,8 @@ class NodesController extends Controller
         if (!$menu) {
             throw new NotFoundHttpException('Menu not found');
         }
+
+        $this->_requireEditNodes($menu);
 
         // Check max nodes
         if ($menu->maxNodes) {
@@ -81,6 +97,7 @@ class NodesController extends Controller
     public function actionElementSelectHtml(): Response
     {
         $this->requireAcceptsJson();
+        $this->_requireEditNodesSomewhere();
 
         $request = Craft::$app->getRequest();
         $nodeType = (string)$request->getRequiredParam('nodeType');
@@ -145,6 +162,8 @@ class NodesController extends Controller
             throw new NotFoundHttpException('Node not found');
         }
 
+        $this->_requireEditNodes($node->getMenu());
+
         $node->title = $request->getBodyParam('title', $node->title);
         $node->customUrl = $request->getBodyParam('customUrl', $node->customUrl);
         $node->classes = $request->getBodyParam('classes', $node->classes);
@@ -191,6 +210,10 @@ class NodesController extends Controller
             throw new NotFoundHttpException('Node not found');
         }
 
+        if (!FreeNav::getInstance()->getMenus()->canDeleteNodes(Craft::$app->getUser()->getIdentity(), $node->getMenu())) {
+            throw new ForbiddenHttpException('User not authorized to delete nodes in this menu.');
+        }
+
         Craft::$app->getElements()->deleteElement($node);
 
         return $this->asSuccess(Craft::t('free-nav', 'Node deleted.'));
@@ -207,6 +230,8 @@ class NodesController extends Controller
         if (!$node) {
             throw new NotFoundHttpException('Node not found');
         }
+
+        $this->_requireEditNodes($node->getMenu());
 
         return $this->asJson([
             'id' => $node->id,
@@ -237,6 +262,8 @@ class NodesController extends Controller
             throw new NotFoundHttpException('Menu not found');
         }
 
+        $this->_requireEditNodes($menu);
+
         $exclude = null;
         if ($excludeNodeId) {
             $exclude = $this->_getNode($excludeNodeId);
@@ -261,6 +288,8 @@ class NodesController extends Controller
             throw new NotFoundHttpException('Node not found');
         }
 
+        $this->_requireEditNodes($node->getMenu());
+
         $node->enabled = $enabled;
         Craft::$app->getElements()->saveElement($node, false);
 
@@ -284,6 +313,7 @@ class NodesController extends Controller
         }
 
         $menu = $node->getMenu();
+        $this->_requireEditNodes($menu);
         $nodes = FreeNav::getInstance()->getNodes();
 
         $parent = $nodes->findNodeInMenu($menu, $parentId, $node->siteId);
@@ -294,6 +324,28 @@ class NodesController extends Controller
         }
 
         return $this->asSuccess();
+    }
+
+    private function _requireEditNodes(Menu $menu): void
+    {
+        if (!FreeNav::getInstance()->getMenus()->canEditNodes(Craft::$app->getUser()->getIdentity(), $menu)) {
+            throw new ForbiddenHttpException('User not authorized to edit nodes in this menu.');
+        }
+    }
+
+    /** For the element picker, which is not tied to one menu. */
+    private function _requireEditNodesSomewhere(): void
+    {
+        $user = Craft::$app->getUser()->getIdentity();
+        $menus = FreeNav::getInstance()->getMenus();
+
+        foreach ($menus->getAllMenus() as $menu) {
+            if ($menus->canEditNodes($user, $menu)) {
+                return;
+            }
+        }
+
+        throw new ForbiddenHttpException('User not authorized to edit nodes.');
     }
 
     /**

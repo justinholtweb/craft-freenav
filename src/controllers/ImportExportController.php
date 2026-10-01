@@ -9,18 +9,46 @@ use craft\web\Controller;
 use justinholt\freenav\FreeNav;
 use justinholt\freenav\models\Menu;
 use justinholt\freenav\models\MenuSiteSettings;
+use yii\web\ForbiddenHttpException;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
 use yii\web\UploadedFile;
 
 class ImportExportController extends Controller
 {
+    public function beforeAction($action): bool
+    {
+        if (!parent::beforeAction($action)) {
+            return false;
+        }
+
+        $this->requireCpRequest();
+        $this->requirePermission('accessPlugin-free-nav');
+
+        // Importing and migrating create menus, which are project config.
+        if ($action->id !== 'export') {
+            if (!FreeNav::getInstance()->getMenus()->canManageMenus(Craft::$app->getUser()->getIdentity())) {
+                throw new ForbiddenHttpException('User not authorized to manage menus.');
+            }
+
+            if (!Craft::$app->getConfig()->getGeneral()->allowAdminChanges) {
+                throw new ForbiddenHttpException('Menus can only be changed where admin changes are allowed.');
+            }
+        }
+
+        return true;
+    }
+
     public function actionExport(int $menuId): Response
     {
         $menu = FreeNav::getInstance()->getMenus()->getMenuById($menuId);
 
         if (!$menu) {
             throw new NotFoundHttpException('Menu not found');
+        }
+
+        if (!FreeNav::getInstance()->getMenus()->canManageMenu(Craft::$app->getUser()->getIdentity(), $menu)) {
+            throw new ForbiddenHttpException('User not authorized to export this menu.');
         }
 
         $nodes = FreeNav::getInstance()->getNodes()->findNodesInMenu($menuId)->all();

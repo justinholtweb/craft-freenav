@@ -642,6 +642,18 @@ class Node extends Element
         parent::afterDelete();
     }
 
+    protected function defineRules(): array
+    {
+        $rules = parent::defineRules();
+        $rules[] = [['customUrl'], function(string $attribute) {
+            if ($this->customUrl && $this->getNodeType() === NodeTypeEnum::Custom && $this->_parseUrl($this->customUrl) === null) {
+                $this->addError($attribute, Craft::t('free-nav', 'Use a web address, a path, an anchor, or a mailto:, tel: or sms: link. Environment variables and aliases must resolve to an http(s) address.'));
+            }
+        }, 'skipOnEmpty' => true];
+
+        return $rules;
+    }
+
     public function canView(\craft\elements\User $user): bool
     {
         return true;
@@ -686,20 +698,39 @@ class Node extends Element
         };
     }
 
+    /**
+     * The custom URL a visitor may follow, or null.
+     *
+     * Anyone with "edit nodes" writes this, and it ends up in an `href` on every page and in the
+     * REST API. So until 5.1.5 two things were possible that should not be: a `javascript:` link,
+     * and `$CRAFT_SECURITY_KEY` (or any other secret) resolved by `parseEnv()` and printed for
+     * the world. Environment variables and aliases now have to come out as an http(s) address,
+     * and only link schemes that cannot run anything are allowed through.
+     */
     private function _parseUrl(?string $url): ?string
     {
-        if ($url === null || $url === '') {
+        $url = trim((string)$url);
+
+        if ($url === '') {
             return null;
         }
 
-        // Handle environment variables
-        if (str_starts_with($url, '$')) {
-            $url = App::parseEnv($url);
+        if (str_starts_with($url, '$') || str_starts_with($url, '@')) {
+            $resolved = str_starts_with($url, '$') ? App::parseEnv($url) : Craft::getAlias($url, false);
+
+            if (!is_string($resolved) || !preg_match('~^https?://[^/?#@\s]+(?:[/?#]\S*)?$~i', $resolved)) {
+                return null;
+            }
+
+            return $resolved;
         }
 
-        // Handle aliases
-        if (str_starts_with($url, '@')) {
-            $url = Craft::getAlias($url);
+        // Browsers ignore whitespace and control characters inside a scheme, so `java\tscript:`
+        // is still JavaScript.
+        $compact = preg_replace('/[\x00-\x20]+/', '', $url) ?? '';
+
+        if (preg_match('/^([a-z][a-z0-9+.-]*):/i', $compact, $m)) {
+            return in_array(strtolower($m[1]), ['http', 'https', 'mailto', 'tel', 'sms'], true) ? $url : null;
         }
 
         return $url;

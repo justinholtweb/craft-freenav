@@ -10,20 +10,24 @@
 
 {% block actionButton %}
     <div class="btngroup">
-        <button id="freenav-add-node-btn" class="btn submit" type="button">
-            {{ 'Add node'|t('free-nav') }}
-        </button>
+        {% if canEditNodes %}
+            <button id="freenav-add-node-btn" class="btn submit" type="button">
+                {{ 'Add node'|t('free-nav') }}
+            </button>
+        {% endif %}
 
-        <button class="btn menubtn" type="button"></button>
-        <div class="menu">
-            <ul>
-                <li>
-                    <a href="{{ actionUrl('free-nav/import-export/export', { menuId: menu.id }) }}">
-                        {{ 'Export JSON'|t('free-nav') }}
-                    </a>
-                </li>
-            </ul>
-        </div>
+        {% if canManageMenu %}
+            <button class="btn menubtn" type="button"></button>
+            <div class="menu">
+                <ul>
+                    <li>
+                        <a href="{{ actionUrl('free-nav/import-export/export', { menuId: menu.id }) }}">
+                            {{ 'Export JSON'|t('free-nav') }}
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        {% endif %}
     </div>
 {% endblock %}
 
@@ -95,17 +99,21 @@
                             </span>
 
                             <span class="freenav-node-actions">
-                                <button class="freenav-node-edit btn small"
-                                        data-node-id="{{ node.id }}"
-                                        type="button">
-                                    {{ 'Edit'|t('app') }}
-                                </button>
-                                <button class="freenav-node-delete btn small"
-                                        data-node-id="{{ node.id }}"
-                                        type="button"
-                                        title="{{ 'Delete'|t('app') }}">
-                                    <span data-icon="remove"></span>
-                                </button>
+                                {% if canEditNodes %}
+                                    <button class="freenav-node-edit btn small"
+                                            data-node-id="{{ node.id }}"
+                                            type="button">
+                                        {{ 'Edit'|t('app') }}
+                                    </button>
+                                {% endif %}
+                                {% if canDeleteNodes %}
+                                    <button class="freenav-node-delete btn small"
+                                            data-node-id="{{ node.id }}"
+                                            type="button"
+                                            title="{{ 'Delete'|t('app') }}">
+                                        <span data-icon="remove"></span>
+                                    </button>
+                                {% endif %}
                             </span>
                         </div>
                     </div>

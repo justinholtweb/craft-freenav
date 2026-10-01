@@ -80,7 +80,7 @@ Go to **FreeNav > Menus > New menu**. Set a name (`Main Menu`) and handle (`main
 Click **Build** on your menu. Use the slide-out panel to add nodes:
 
 - **Entry/Category/Asset** — Select a Craft element (title and URL sync automatically)
-- **Custom URL** — Any URL, including environment variables (`$BASE_URL/about`)
+- **Custom URL** — A web address, path, anchor, or `mailto:`/`tel:`/`sms:` link, including environment variables and aliases (`$BASE_URL/about`) as long as they resolve to an `http(s)` address
 - **Passive** — A non-linking label (great for dropdown group headings)
 
 Drag nodes to reorder. Nest them for submenus.
@@ -458,14 +458,21 @@ Event::on(
 
 ## Permissions
 
+Every CP action needs **Access FreeNav** and then one of these. Menu definitions and plugin settings
+are project config, so changing them also needs `allowAdminChanges`; plugin settings are admin-only.
+
 | Permission | Description |
 |------------|-------------|
-| `freeNav-manageMenus` | Create, edit, delete menus |
-| `freeNav-manageMenu:{uid}` | Manage a specific menu |
-| `freeNav-editNodes` | Edit nodes in any menu |
-| `freeNav-editNodes:{uid}` | Edit nodes in a specific menu |
-| `freeNav-deleteNodes` | Delete nodes from any menu |
-| `freeNav-deleteNodes:{uid}` | Delete nodes from a specific menu |
+| `freeNav-manageMenus` | Create, edit, duplicate, reorder, import and delete menus |
+| `freeNav-manageMenu:{uid}` | Edit one menu's settings and export it |
+| `freeNav-editNodes` | Add, edit, move and toggle nodes in any menu |
+| ↳ `freeNav-deleteNodes` | Delete nodes from any menu |
+| `freeNav-editNodes:{uid}` | Add, edit, move and toggle nodes in one menu |
+| ↳ `freeNav-deleteNodes:{uid}` | Delete nodes from one menu |
+
+The per-menu permissions stand on their own — they are not nested under the all-menus ones, so you
+can grant one menu without granting every menu. The builder also needs Craft's access to the site
+being edited.
 
 ---
 

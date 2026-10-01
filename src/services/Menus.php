@@ -4,6 +4,7 @@ namespace justinholt\freenav\services;
 
 use Craft;
 use craft\db\Query;
+use craft\elements\User;
 use craft\events\ConfigEvent;
 use craft\helpers\StringHelper;
 use craft\models\FieldLayout;
@@ -80,6 +81,10 @@ class Menus extends Component
         return $row ? new Menu($row) : null;
     }
 
+    /**
+     * The menus the current user can open: ones they manage, and ones whose nodes they can edit
+     * (an "edit nodes" user still needs to reach the builder).
+     */
     public function getEditableMenus(): array
     {
         $user = Craft::$app->getUser()->getIdentity();
@@ -88,14 +93,37 @@ class Menus extends Component
             return [];
         }
 
-        if ($user->admin) {
-            return $this->getAllMenus();
-        }
+        return array_values(array_filter(
+            $this->getAllMenus(),
+            fn(Menu $menu) => $this->canManageMenu($user, $menu) || $this->canEditNodes($user, $menu),
+        ));
+    }
 
-        return array_filter($this->getAllMenus(), function(Menu $menu) use ($user) {
-            return $user->can('freeNav-manageMenu:' . $menu->uid)
-                || $user->can('freeNav-manageMenus');
-        });
+    // Permissions — the one place the documented meanings live:
+    //   freeNav-manageMenus            create, edit and delete menus
+    //   freeNav-manageMenu:{uid}       edit one menu's settings
+    //   freeNav-editNodes(:{uid})      add, edit, move and toggle nodes
+    //   freeNav-deleteNodes(:{uid})    delete nodes
+    // -------------------------------------------------------------------------
+
+    public function canManageMenus(User $user): bool
+    {
+        return $user->admin || $user->can('freeNav-manageMenus');
+    }
+
+    public function canManageMenu(User $user, Menu $menu): bool
+    {
+        return $this->canManageMenus($user) || $user->can('freeNav-manageMenu:' . $menu->uid);
+    }
+
+    public function canEditNodes(User $user, Menu $menu): bool
+    {
+        return $user->admin || $user->can('freeNav-editNodes') || $user->can('freeNav-editNodes:' . $menu->uid);
+    }
+
+    public function canDeleteNodes(User $user, Menu $menu): bool
+    {
+        return $user->admin || $user->can('freeNav-deleteNodes') || $user->can('freeNav-deleteNodes:' . $menu->uid);
     }
 
     public function getMenuSiteSettings(int $menuId): array
