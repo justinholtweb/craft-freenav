@@ -29,6 +29,7 @@ use justinholt\freenav\models\Settings;
 use justinholt\freenav\services\Breadcrumbs;
 use justinholt\freenav\services\MenuCache;
 use justinholt\freenav\services\Menus;
+use justinholt\freenav\services\MenuTransfer;
 use justinholt\freenav\services\Nodes;
 use justinholt\freenav\services\NodeTypes;
 use justinholt\freenav\services\Renderer;
@@ -42,6 +43,7 @@ use yii\base\Event;
  * @property-read Renderer $renderer
  * @property-read Breadcrumbs $breadcrumbs
  * @property-read MenuCache $menuCache
+ * @property-read MenuTransfer $menuTransfer
  * @method Settings getSettings()
  */
 class FreeNav extends Plugin
@@ -60,6 +62,7 @@ class FreeNav extends Plugin
                 'renderer' => Renderer::class,
                 'breadcrumbs' => Breadcrumbs::class,
                 'menuCache' => MenuCache::class,
+                'menuTransfer' => MenuTransfer::class,
             ],
         ];
     }
@@ -72,6 +75,11 @@ class FreeNav extends Plugin
     public function getNodes(): Nodes
     {
         return $this->get('nodes');
+    }
+
+    public function getMenuTransfer(): MenuTransfer
+    {
+        return $this->get('menuTransfer');
     }
 
     public function getNodeTypes(): NodeTypes

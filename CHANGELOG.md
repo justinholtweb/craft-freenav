@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Menu import and export from the console.** `php craft free-nav/menus/export <handle> --file=…` writes the same JSON the control panel's "Export JSON" downloads (to stdout without `--file`), and `php craft free-nav/menus/import --file=…` reads it back — creating the menu, or with `--replace` swapping an existing menu's nodes for the file's. Seed menus in deploy scripts and move them between environments without the control panel. Replacing nodes is content, so it works where `allowAdminChanges` is off; creating a menu still needs it.
+- Exports now include each node's visibility rules and data.
+
+### Changed
+
+- Imports are all-or-nothing. Every node is checked before anything is written — custom URLs through the node editor's own rule, plus the menu's node and level limits — and a file that fails changes nothing. The control panel import used to skip nodes that wouldn't save and carry on.
+- The control panel import reports links to entries, categories, assets or products that don't exist in this environment instead of silently dropping them.
+
+### Fixed
+
+- **Exports of nested menus put every child under every parent.** A menu with two parents that each had children exported all the second-level nodes under each top-level node, so an import duplicated them. Each node now exports under its own parent.
+- An import only looks up a linked element of the class its node type links to; the class named in the file is no longer used to query.
+
 ## 5.1.5 - 2026-10-01
 
 ### Security

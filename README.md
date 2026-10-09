@@ -374,12 +374,41 @@ Enable per-menu access in **Settings > GraphQL > Schemas** under the **FreeNav**
 Go to **FreeNav > Menus > [menu] > Build**, click the menu button next to "Add node", and select **Export JSON**.
 
 ### Import
-POST a JSON file to `free-nav/import-export/import` from the CP. Element-linked nodes are exported with UIDs for cross-environment portability.
+Go to **FreeNav > Settings**, choose the file under **Import from JSON**, and click **Import**. If a menu with the file's handle already exists, the import becomes a copy beside it (`mainMenu_imported`, "Main Menu (Imported)") — the existing menu is never touched.
+
+Element-linked nodes are exported with their element's UID, so they find the same entry, category, asset or product in another environment. A link whose element doesn't exist there imports as a node with no link, and the import tells you which.
+
+An import is all-or-nothing. Every node is checked first — custom URLs through the same rule the node editor uses, so `javascript:` links and environment variables that don't resolve to an `http(s)` address are refused — along with the menu's node and level limits. If anything fails, nothing is created or changed.
+
+### From the console
+The same export and import run from the command line, for deploy scripts and for moving menu content between environments without the control panel:
+
+```bash
+# Export a menu (prints the JSON without --file)
+php craft free-nav/menus/export mainMenu --file=storage/mainMenu.json
+
+# Import: creates the menu when no menu has the file's handle
+php craft free-nav/menus/import --file=storage/mainMenu.json
+
+# Replace an existing menu's nodes with the file's
+php craft free-nav/menus/import --file=storage/mainMenu.json --replace
+
+# Import into a different handle, reading the file from stdin
+cat mainMenu.json | php craft free-nav/menus/import footerNav --file=- --replace
+```
+
+A menu's definition is project config but its nodes are content, so the two cases differ:
+
+- **`--replace` into a menu that exists** works in any environment, `allowAdminChanges` or not. It replaces the nodes and leaves the menu's settings (name, sites, limits, field layout) alone. Replaced nodes go to Craft's trash.
+- **Creating a menu** needs `allowAdminChanges`, like creating one in the control panel. In production, create the menu locally and let project config deploy it, then import its nodes there with `--replace`.
+- Without `--replace`, importing over an existing menu does nothing and exits non-zero.
+
+Every failure exits non-zero and changes nothing, so a deploy script can stop on it.
 
 ### Format
 ```json
 {
-    "freeNav": "1.1.0",
+    "freeNav": "1.2.0",
     "menu": {
         "name": "Main Menu",
         "handle": "mainMenu",
@@ -418,6 +447,10 @@ php craft free-nav/menus/clear-cache
 
 # Clear cache for a specific menu
 php craft free-nav/menus/clear-cache mainMenu
+
+# Export a menu as JSON, and import one (see Import / Export)
+php craft free-nav/menus/export mainMenu --file=mainMenu.json
+php craft free-nav/menus/import --file=mainMenu.json --replace
 ```
 
 ---
