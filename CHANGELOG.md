@@ -1,7 +1,6 @@
 # Changelog
 
-## Unreleased
-
+## 5.2.0 - 2026-10-09
 ### Added
 
 - **Menu import and export from the console.** `php craft free-nav/menus/export <handle> --file=…` writes the same JSON the control panel's "Export JSON" downloads (to stdout without `--file`), and `php craft free-nav/menus/import --file=…` reads it back — creating the menu, or with `--replace` swapping an existing menu's nodes for the file's. Seed menus in deploy scripts and move them between environments without the control panel. Replacing nodes is content, so it works where `allowAdminChanges` is off; creating a menu still needs it.
