@@ -1,10 +1,9 @@
 includes:
-    - vendor/craftcms/phpstan/phpstan.neon
+    - vendor/larastan/larastan/extension.neon
 
 parameters:
     level: 5
-    treatPhpDocTypesAsCertain: false
     paths:
         - src
-    excludePaths:
-        - src/templates/*
+        - database
+        - routes
