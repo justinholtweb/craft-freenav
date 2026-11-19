@@ -200,6 +200,13 @@ class Node extends Element
 
         if ($this->urlSuffix) {
             $baseUrl .= $this->urlSuffix;
+
+            // Checked again with the suffix on: a relative custom URL such as `java` plus a suffix
+            // of `script:…` would otherwise make a `javascript:` link. This also covers suffixes
+            // saved before the suffix rule existed.
+            if (!self::_hasSafeScheme($baseUrl)) {
+                return null;
+            }
         }
 
         return $baseUrl;
@@ -657,6 +664,11 @@ class Node extends Element
                 $this->addError($attribute, Craft::t('free-nav', 'Use a web address, a path, an anchor, or a mailto:, tel: or sms: link. Environment variables and aliases must resolve to an http(s) address.'));
             }
         }, 'skipOnEmpty' => true];
+        $rules[] = [['urlSuffix'], function(string $attribute) {
+            if (!preg_match('/^[?#&\/]/', (string)$this->urlSuffix)) {
+                $this->addError($attribute, Craft::t('free-nav', 'A URL suffix starts with #, ?, & or /.'));
+            }
+        }, 'skipOnEmpty' => true];
         $rules[] = [['customAttributes'], function(string $attribute) {
             foreach ($this->getCustomAttributesArray() as $attr) {
                 $key = trim((string)(is_array($attr) ? ($attr['key'] ?? '') : ''));
@@ -801,14 +813,22 @@ class Node extends Element
             return $resolved;
         }
 
+        return self::_hasSafeScheme($url) ? $url : null;
+    }
+
+    /**
+     * A URL with no scheme (relative), or an http(s), mailto, tel or sms one.
+     */
+    private static function _hasSafeScheme(string $url): bool
+    {
         // Browsers ignore whitespace and control characters inside a scheme, so `java\tscript:`
         // is still JavaScript.
         $compact = preg_replace('/[\x00-\x20]+/', '', $url) ?? '';
 
         if (preg_match('/^([a-z][a-z0-9+.-]*):/i', $compact, $m)) {
-            return in_array(strtolower($m[1]), ['http', 'https', 'mailto', 'tel', 'sms'], true) ? $url : null;
+            return in_array(strtolower($m[1]), ['http', 'https', 'mailto', 'tel', 'sms'], true);
         }
 
-        return $url;
+        return true;
     }
 }
