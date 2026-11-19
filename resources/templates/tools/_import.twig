@@ -1,0 +1,25 @@
+{# The Import screen: a FreeNav JSON export, or Verbb Navigation's tables. Rendered inside the CP shell. #}
+<div class="freenav-tools">
+    <section class="freenav-tools__section">
+        <h2>{{ 'Import from JSON'|t('free-nav') }}</h2>
+        <p>{{ 'Import a menu from a FreeNav JSON export file. A menu with the same handle is left alone and the import becomes a copy beside it.'|t('free-nav') }}</p>
+        <form method="post" action="{{ importUrl }}" accept-charset="UTF-8" enctype="multipart/form-data">
+            {{ csrfInput() }}
+            <input type="file" name="importFile" accept=".json,application/json" required>
+            <button type="submit" class="btn submit">{{ 'Import'|t('free-nav') }}</button>
+        </form>
+    </section>
+
+    <section class="freenav-tools__section">
+        <h2>{{ 'Migrate from Verbb Navigation'|t('free-nav') }}</h2>
+        <p>{{ 'Import all navigations and nodes from Verbb Navigation’s tables. Existing menus with matching handles are skipped. The tables are left as they are.'|t('free-nav') }}</p>
+        {% if verbbAvailable %}
+            <form method="post" action="{{ migrateUrl }}" accept-charset="UTF-8">
+                {{ csrfInput() }}
+                <button type="submit" class="btn">{{ 'Migrate from Navigation'|t('free-nav') }}</button>
+            </form>
+        {% else %}
+            <p><em>{{ 'Verbb Navigation tables not found.'|t('free-nav') }}</em></p>
+        {% endif %}
+    </section>
+</div>

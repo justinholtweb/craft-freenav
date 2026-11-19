@@ -1,33 +1,37 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Http\Controllers;
 
-use Craft;
-use craft\web\Controller;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use JustinHoltWeb\FreeNav\Elements\Node;
 use JustinHoltWeb\FreeNav\FreeNav;
-use yii\web\NotFoundHttpException;
-use yii\web\Response;
+use JustinHoltWeb\FreeNav\Services\Breadcrumbs;
+use JustinHoltWeb\FreeNav\Services\Menus;
 
-class ApiController extends Controller
+/**
+ * The REST API: `actions/free-nav/api/get-menus`, `get-menu?handle=…` and
+ * `get-breadcrumbs?uri=…`.
+ *
+ * Anonymous, and on unless turned off in the settings — so it applies the same visibility rules
+ * the rendered menu does, and only lists enabled nodes.
+ */
+class ApiController
 {
-    protected array|bool|int $allowAnonymous = true;
+    public function __construct(
+        private readonly Menus $menus,
+        private readonly Breadcrumbs $breadcrumbs,
+    ) {}
 
-    public function beforeAction($action): bool
+    public function getMenus(): JsonResponse
     {
-        if (!FreeNav::getInstance()->getSettings()->restApiEnabled) {
-            throw new NotFoundHttpException('REST API is disabled.');
-        }
-
-        return parent::beforeAction($action);
-    }
-
-    public function actionGetMenus(): Response
-    {
-        $menus = FreeNav::getInstance()->getMenus()->getAllMenus();
+        $this->requireEnabled();
 
         $data = [];
-        foreach ($menus as $menu) {
+
+        foreach ($this->menus->getAllMenus() as $menu) {
             $data[] = [
                 'id' => $menu->id,
                 'name' => $menu->name,
@@ -37,21 +41,19 @@ class ApiController extends Controller
             ];
         }
 
-        return $this->asJson(['menus' => $data]);
+        return response()->json(['menus' => $data]);
     }
 
-    public function actionGetMenu(): Response
+    public function getMenu(Request $request): JsonResponse
     {
-        $handle = Craft::$app->getRequest()->getRequiredQueryParam('handle');
+        $this->requireEnabled();
 
-        $menu = FreeNav::getInstance()->getMenus()->getMenuByHandle($handle);
+        $handle = $request->query('handle');
+        abort_unless(is_string($handle) && $handle !== '', 400, 'Missing required parameter: handle');
 
-        if (!$menu) {
-            throw new NotFoundHttpException('Menu not found');
-        }
+        $menu = $this->menus->getMenuByHandle($handle) ?? abort(404, 'Menu not found');
 
-        // Top level only — each node carries its own children. Until 5.1.5 every node was listed
-        // at the top level *and* inside its parent.
+        // Top level only — each node carries its own children.
         $nodes = Node::find()
             ->menuHandle($handle)
             ->level(1)
@@ -59,15 +61,16 @@ class ApiController extends Controller
             ->all();
 
         $nodeData = [];
+
         foreach ($nodes as $node) {
             // The same visibility rules the rendered menu applies: a "members only" link is not
             // for an anonymous API caller either.
             if ($node->isVisible()) {
-                $nodeData[] = $this->_serializeNode($node);
+                $nodeData[] = $this->serializeNode($node);
             }
         }
 
-        return $this->asJson([
+        return response()->json([
             'menu' => [
                 'id' => $menu->id,
                 'name' => $menu->name,
@@ -78,21 +81,32 @@ class ApiController extends Controller
         ]);
     }
 
-    public function actionGetBreadcrumbs(): Response
+    public function getBreadcrumbs(Request $request): JsonResponse
     {
-        $uri = Craft::$app->getRequest()->getQueryParam('uri', '');
+        $this->requireEnabled();
 
-        $breadcrumbs = FreeNav::getInstance()->getBreadcrumbs()->generate([
-            'uri' => $uri,
-        ]);
+        $uri = $request->query('uri');
+        $breadcrumbs = $this->breadcrumbs->generate(['uri' => is_string($uri) ? $uri : '']);
 
-        return $this->asJson(['breadcrumbs' => $breadcrumbs]);
+        // The element itself would serialise every field it has; callers get what a breadcrumb
+        // needs.
+        foreach ($breadcrumbs as &$crumb) {
+            $element = $crumb['element'];
+            $crumb['element'] = $element ? ['id' => $element->id, 'title' => $element->title, 'url' => $element->getUrl()] : null;
+        }
+
+        return response()->json(['breadcrumbs' => $breadcrumbs]);
     }
 
-    private function _serializeNode(Node $node): array
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeNode(Node $node): array
     {
-        /** @var Node[] $childNodes */
-        $childNodes = array_filter($node->getChildren()->status('enabled')->all(), fn($child) => $child instanceof Node && $child->isVisible());
+        $children = array_filter(
+            Node::find()->descendantOf($node)->descendantDist(1)->siteId($node->siteId)->status('enabled')->all(),
+            fn (Node $child) => $child->isVisible(),
+        );
 
         return [
             'id' => $node->id,
@@ -102,16 +116,18 @@ class ApiController extends Controller
             'level' => $node->level,
             'classes' => $node->classes,
             'urlSuffix' => $node->urlSuffix,
-            'customAttributes' => $node->getCustomAttributesArray(),
+            'customAttributes' => Node::safeCustomAttributes($node->getCustomAttributesArray()) ?? [],
             'newWindow' => $node->newWindow,
             'icon' => $node->icon,
             'badge' => $node->badge,
             'active' => $node->isActive(),
             'enabled' => $node->enabled,
-            'children' => array_values(array_map(
-                fn(Node $child) => $this->_serializeNode($child),
-                $childNodes
-            )),
+            'children' => array_values(array_map(fn (Node $child) => $this->serializeNode($child), $children)),
         ];
+    }
+
+    private function requireEnabled(): void
+    {
+        abort_unless(FreeNav::getInstance()->getSettings()->restApiEnabled, 404, 'REST API is disabled.');
     }
 }

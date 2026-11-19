@@ -1,377 +1,366 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Http\Controllers;
 
-use Craft;
-use craft\helpers\Cp;
-use craft\helpers\Json;
-use craft\helpers\UrlHelper;
-use craft\web\Controller;
-use JustinHoltWeb\FreeNav\AssetBundles\FreeNavAsset;
+use CraftCms\Cms\Cp\Data\ActionItem;
+use CraftCms\Cms\Http\RespondsWithFlash;
+use CraftCms\Cms\Http\Responses\CpScreenResponse;
+use CraftCms\Cms\Support\Facades\Fields;
+use CraftCms\Cms\Support\Facades\Sites;
+use CraftCms\Cms\Support\Html;
+use CraftCms\Cms\Ui\Controls\Choice;
+use CraftCms\Cms\Ui\Controls\FieldLayoutDesigner;
+use CraftCms\Cms\Ui\Controls\Hidden;
+use CraftCms\Cms\Ui\Controls\Lightswitch;
+use CraftCms\Cms\Ui\Controls\Number;
+use CraftCms\Cms\Ui\Controls\Text;
+use CraftCms\Cms\Ui\Controls\Textarea;
+use CraftCms\Cms\Ui\Enums\ControlMode;
+use CraftCms\Cms\Ui\Nodes\Callout;
+use CraftCms\Cms\Ui\Nodes\Field;
+use CraftCms\Cms\Ui\Nodes\Heading;
+use CraftCms\Cms\Ui\Nodes\Table;
+use CraftCms\Cms\Ui\Ui;
+use CraftCms\Cms\Ui\UiContext;
+use CraftCms\Cms\User\Elements\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use JustinHoltWeb\FreeNav\Elements\Node;
 use JustinHoltWeb\FreeNav\Enums\Propagation;
-use JustinHoltWeb\FreeNav\FreeNav;
-use JustinHoltWeb\FreeNav\Helpers\NodeHelper;
 use JustinHoltWeb\FreeNav\Models\Menu;
 use JustinHoltWeb\FreeNav\Models\MenuSiteSettings;
-use yii\web\ForbiddenHttpException;
-use yii\web\NotFoundHttpException;
-use yii\web\Response;
+use JustinHoltWeb\FreeNav\Services\Menus;
+use JustinHoltWeb\FreeNav\Services\Nodes;
+use Symfony\Component\HttpFoundation\Response;
 
-class MenusController extends Controller
+use function CraftCms\Cms\cp_url;
+use function CraftCms\Cms\currentUserElement;
+use function CraftCms\Cms\t;
+
+/**
+ * Menu definitions: the list, the settings screen (with the menu's node field layout), reorder,
+ * duplicate and delete.
+ *
+ * Every route here is behind `accessPlugin-free-nav` (routes/cp.php); each action checks the
+ * menu permission it needs through `Menus`. Writes to menu definitions are project config, so
+ * they also need `allowAdminChanges`.
+ */
+class MenusController
 {
-    public function beforeAction($action): bool
+    use RespondsWithFlash;
+
+    public function __construct(
+        private readonly Menus $menus,
+        private readonly Nodes $nodes,
+    ) {}
+
+    public function index(): CpScreenResponse
     {
-        if (!parent::beforeAction($action)) {
-            return false;
-        }
+        $user = $this->user();
+        $canCreate = $this->menus->canManageMenus($user) && $this->menus->allowAdminChanges();
+        $rows = [];
 
-        // Every action here is control-panel work. Until 5.1.5 none of them checked anything, so
-        // any signed-in user — a front-end member included — could post to them.
-        $this->requireCpRequest();
-        $this->requirePermission('accessPlugin-free-nav');
+        foreach ($this->menus->getEditableMenus($user) as $menu) {
+            $manageable = $this->menus->canManageMenu($user, $menu);
+            $treeUrl = cp_url("free-nav/menus/{$menu->id}/build");
+            $count = $this->nodes->getNodeCount((int) $menu->id, $this->siteIdFor($menu));
 
-        return true;
-    }
-
-    public function actionIndex(): Response
-    {
-        $menus = FreeNav::getInstance()->getMenus()->getEditableMenus();
-        $nodesService = FreeNav::getInstance()->getNodes();
-        $sitesService = Craft::$app->getSites();
-        $requestedSite = Cp::requestedSite();
-
-        $nodeCounts = [];
-        $buildUrls = [];
-        $manageable = [];
-        $user = Craft::$app->getUser()->getIdentity();
-        $menusService = FreeNav::getInstance()->getMenus();
-
-        foreach ($menus as $menu) {
-            // Nodes belong to a site, so the count has to name one. Use the same site the
-            // builder will land on — the requested one when the menu supports it, otherwise
-            // the menu's first site — or the count won't match the page it links to.
-            $enabledSiteIds = $menu->getEnabledSiteIds();
-            $siteId = $requestedSite && in_array($requestedSite->id, $enabledSiteIds, true)
-                ? $requestedSite->id
-                : reset($enabledSiteIds);
-            $site = $siteId ? $sitesService->getSiteById($siteId) : null;
-
-            $nodeCounts[$menu->id] = $nodesService->getNodeCount($menu->id, $site?->id);
-            $manageable[$menu->id] = $menusService->canManageMenu($user, $menu);
-            $buildUrls[$menu->id] = UrlHelper::cpUrl(
-                "free-nav/menus/$menu->id/build",
-                $site ? ['site' => $site->handle] : []
-            );
-        }
-
-        return $this->renderTemplate('free-nav/menus/_index', [
-            'menus' => $menus,
-            'nodeCounts' => $nodeCounts,
-            'buildUrls' => $buildUrls,
-            'manageable' => $manageable,
-            'canCreate' => $menusService->canManageMenus($user),
-        ]);
-    }
-
-    public function actionEdit(?int $menuId = null, ?Menu $menu = null): Response
-    {
-        if ($menu === null) {
-            if ($menuId !== null) {
-                $menu = FreeNav::getInstance()->getMenus()->getMenuById($menuId);
-
-                if (!$menu) {
-                    throw new NotFoundHttpException('Menu not found');
-                }
-            } else {
-                $menu = new Menu();
-            }
-        }
-
-        $isNew = !$menu->id;
-
-        if ($isNew) {
-            $this->_requireManageMenus();
-        } else {
-            $this->_requireManageMenu($menu);
-        }
-
-        if (!$isNew) {
-            $title = $menu->name;
-        } else {
-            $title = Craft::t('free-nav', 'Create a new menu');
-        }
-
-        $sites = Craft::$app->getSites()->getAllSites();
-        $propagationOptions = [];
-        foreach (Propagation::cases() as $case) {
-            $propagationOptions[] = [
-                'label' => $case->label(),
-                'value' => $case->value,
+            $rows[] = [
+                'id' => $menu->id,
+                'name' => ['label' => (string) $menu->name, 'url' => $treeUrl],
+                'handle' => ['html' => Html::tag('code', Html::encode((string) $menu->handle))],
+                'nodes' => ['label' => t('{count} nodes', ['count' => $count], category: 'free-nav'), 'url' => $treeUrl],
+                'settings' => $manageable ? ['label' => t('Settings', category: 'free-nav'), 'url' => cp_url("free-nav/menus/{$menu->id}")] : '',
+                'export' => $manageable ? ['label' => t('Export JSON', category: 'free-nav'), 'url' => cp_url("free-nav/menus/{$menu->id}/export")] : '',
+                '_deletable' => $canCreate,
+                '_deleteUrl' => cp_url("free-nav/menus/{$menu->id}"),
+                '_deleteConfirmMessage' => t('Delete “{name}” and all of its nodes?', ['name' => $menu->name], category: 'free-nav'),
             ];
         }
 
-        // Get existing site settings or create defaults
-        $siteSettings = $menu->getSiteSettings();
-        if (empty($siteSettings)) {
-            foreach ($sites as $site) {
-                $siteSettings[$site->id] = new MenuSiteSettings([
-                    'siteId' => $site->id,
-                    'enabled' => true,
+        $table = Table::make('freenav-menus')
+            ->columns([
+                ['key' => 'name', 'label' => t('Name', category: 'free-nav'), 'width' => '2fr'],
+                ['key' => 'handle', 'label' => t('Handle', category: 'free-nav')],
+                ['key' => 'nodes', 'label' => t('Nodes', category: 'free-nav')],
+                ['key' => 'settings', 'label' => t('Settings', category: 'free-nav')],
+                ['key' => 'export', 'label' => t('Export', category: 'free-nav')],
+            ])
+            ->rows($rows)
+            ->emptyMessage(t('No menus exist yet.', category: 'free-nav'));
+
+        if ($canCreate) {
+            $table
+                ->createAction(t('New menu', category: 'free-nav'), cp_url('free-nav/menus/new'))
+                ->createActionInPageHeader()
+                ->reorderable(cp_url('free-nav/menus/reorder'), t('New order saved.', category: 'free-nav'))
+                ->deletable()
+                ->bulkActions([
+                    ['label' => t('Duplicate', category: 'free-nav'), 'url' => cp_url('free-nav/menus/duplicate'), 'allowMultiple' => false],
                 ]);
-            }
         }
 
-        return $this->renderTemplate('free-nav/menus/_edit', [
-            'menu' => $menu,
-            'title' => $title,
-            'isNew' => $isNew,
-            'sites' => $sites,
-            'siteSettings' => $siteSettings,
-            'propagationOptions' => $propagationOptions,
-        ]);
+        return new CpScreenResponse()
+            ->title(t('Menus', category: 'free-nav'))
+            ->ui(Ui::make([$table]));
     }
 
-    public function actionSave(): ?Response
+    public function create(): CpScreenResponse
     {
-        $this->requirePostRequest();
+        abort_unless($this->menus->canManageMenus($this->user()), 403, 'User not authorized to manage menus.');
 
-        $request = Craft::$app->getRequest();
-        $menuId = $request->getBodyParam('menuId');
+        $menu = new Menu;
+        $menu->setSiteSettings($this->menus->allSitesSettings());
+
+        return $this->screen($menu);
+    }
+
+    public function edit(int $menuId): CpScreenResponse
+    {
+        $menu = $this->menu($menuId);
+        abort_unless($this->menus->canManageMenu($this->user(), $menu), 403, 'User not authorized to manage this menu.');
+
+        return $this->screen($menu);
+    }
+
+    public function save(Request $request): Response|CpScreenResponse
+    {
+        $user = $this->user();
+        $menuId = $request->integer('menuId');
 
         if ($menuId) {
-            $menu = FreeNav::getInstance()->getMenus()->getMenuById($menuId);
-            if (!$menu) {
-                throw new NotFoundHttpException('Menu not found');
-            }
-            $this->_requireManageMenu($menu);
+            $menu = $this->menu($menuId);
+            abort_unless($this->menus->canManageMenu($user, $menu), 403, 'User not authorized to manage this menu.');
         } else {
-            $this->_requireManageMenus();
-            $menu = new Menu();
+            abort_unless($this->menus->canManageMenus($user), 403, 'User not authorized to manage menus.');
+            $menu = new Menu;
         }
 
-        $this->_requireAdminChanges();
+        $this->requireAdminChanges();
 
-        $menu->name = $request->getBodyParam('name', $menu->name);
-        $menu->handle = $request->getBodyParam('handle', $menu->handle);
-        $menu->instructions = $request->getBodyParam('instructions', $menu->instructions);
-        $menu->propagationMethod = $request->getBodyParam('propagationMethod', $menu->propagationMethod);
-        $menu->maxNodes = $request->getBodyParam('maxNodes') ?: null;
-        $menu->maxLevels = $request->getBodyParam('maxLevels') ?: null;
-        $menu->defaultPlacement = $request->getBodyParam('defaultPlacement', $menu->defaultPlacement);
+        $menu->name = $request->string('name')->trim()->toString();
+        $menu->handle = $request->string('handle')->trim()->toString();
+        $menu->instructions = $request->input('instructions') ?: null;
+        $menu->propagationMethod = (string) $request->input('propagationMethod', $menu->propagationMethod);
+        $menu->maxNodes = $request->filled('maxNodes') ? $request->integer('maxNodes') : null;
+        $menu->maxLevels = $request->filled('maxLevels') ? $request->integer('maxLevels') : null;
+        $menu->defaultPlacement = (string) $request->input('defaultPlacement', $menu->defaultPlacement);
 
-        // Site settings
-        $sitesData = $request->getBodyParam('sites', []);
+        $sites = (array) $request->input('sites', []);
         $siteSettings = [];
 
-        foreach (Craft::$app->getSites()->getAllSites() as $site) {
-            $settings = new MenuSiteSettings();
-            $settings->siteId = $site->id;
-            $settings->enabled = !empty($sitesData[$site->id]['enabled']);
-            $siteSettings[$site->id] = $settings;
+        foreach (Sites::getAllSites() as $site) {
+            $siteSettings[(int) $site->id] = new MenuSiteSettings([
+                'siteId' => (int) $site->id,
+                'enabled' => filter_var($sites[$site->id]['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            ]);
         }
 
         $menu->setSiteSettings($siteSettings);
 
-        if (!FreeNav::getInstance()->getMenus()->saveMenu($menu)) {
-            Craft::$app->getSession()->setError(Craft::t('free-nav', 'Couldn\'t save menu.'));
-
-            Craft::$app->getUrlManager()->setRouteParams([
-                'menu' => $menu,
-            ]);
-
-            return null;
+        if ($request->has('fieldLayout')) {
+            $fieldLayout = Fields::assembleLayoutFromPost();
+            $fieldLayout->type = Node::class;
+            $fieldLayout->id = $menu->fieldLayoutId;
+            $menu->setFieldLayout($fieldLayout);
         }
 
-        Craft::$app->getSession()->setNotice(Craft::t('free-nav', 'Menu saved.'));
+        if (! $this->menus->saveMenu($menu)) {
+            // Inertia keeps the form as it was and shows these against their fields.
+            throw ValidationException::withMessages($menu->errors()->getMessages());
+        }
 
-        return $this->redirectToPostedUrl($menu);
+        return $this->asSuccess(t('Menu saved.', category: 'free-nav'), redirect: cp_url('free-nav/menus'));
     }
 
-    public function actionDelete(): Response
+    public function destroy(int $menuId): Response
     {
-        $this->requirePostRequest();
-        $this->requireAcceptsJson();
+        abort_unless($this->menus->canManageMenus($this->user()), 403, 'User not authorized to manage menus.');
+        $this->requireAdminChanges();
 
-        $this->_requireManageMenus();
-        $this->_requireAdminChanges();
+        $this->menus->deleteMenu($this->menu($menuId));
 
-        $menuId = Craft::$app->getRequest()->getRequiredBodyParam('id');
-        $menu = FreeNav::getInstance()->getMenus()->getMenuById($menuId);
-
-        if (!$menu) {
-            throw new NotFoundHttpException('Menu not found');
-        }
-
-        FreeNav::getInstance()->getMenus()->deleteMenu($menu);
-
-        return $this->asSuccess(Craft::t('free-nav', 'Menu deleted.'));
+        return $this->asSuccess(t('Menu deleted.', category: 'free-nav'), redirect: cp_url('free-nav/menus'));
     }
 
-    public function actionBuild(int $menuId): Response
+    /**
+     * The menus table's drag-and-drop order. Posts `{ids: [...]}`.
+     */
+    public function reorder(Request $request): JsonResponse
     {
-        $menu = FreeNav::getInstance()->getMenus()->getMenuById($menuId);
+        abort_unless($this->menus->canManageMenus($this->user()), 403, 'User not authorized to manage menus.');
+        $this->requireAdminChanges();
 
-        if (!$menu) {
-            throw new NotFoundHttpException('Menu not found');
-        }
+        $ids = array_values(array_filter(array_map('intval', (array) $request->input('ids', [])), fn (int $id) => $id > 0));
+        $this->menus->reorderMenus($ids);
 
-        $user = Craft::$app->getUser()->getIdentity();
-        $menus = FreeNav::getInstance()->getMenus();
-
-        if (!$menus->canManageMenu($user, $menu) && !$menus->canEditNodes($user, $menu)) {
-            throw new ForbiddenHttpException('User not authorized to build this menu.');
-        }
-
-        // Craft doesn't apply ?site= to the current site on CP requests — Cp::requestedSite()
-        // is what honors it. Everything on this page has to work off that site, not the
-        // current one, or the builder silently operates on the primary site.
-        $site = Cp::requestedSite();
-
-        if (!$site) {
-            throw new ForbiddenHttpException('User not authorized to edit content in any sites.');
-        }
-
-        $sitesService = Craft::$app->getSites();
-        $enabledSiteIds = $menu->getEnabledSiteIds();
-
-        // Nodes can only be saved to sites the menu is enabled for, so don't let the
-        // builder run on any other site — send it to one the menu actually supports
-        if (!in_array($site->id, $enabledSiteIds, true)) {
-            $fallbackSite = $sitesService->getSiteById(reset($enabledSiteIds));
-
-            if (!$fallbackSite || $fallbackSite->id === $site->id) {
-                throw new NotFoundHttpException('Menu not found');
-            }
-
-            return $this->redirect(UrlHelper::cpUrl("free-nav/menus/$menuId/build", ['site' => $fallbackSite->handle]));
-        }
-
-        $this->view->registerAssetBundle(FreeNavAsset::class);
-
-        $nodesService = FreeNav::getInstance()->getNodes();
-        $nodes = $nodesService->getNodesByMenuId($menuId, $site->id);
-        $nodeTypes = FreeNav::getInstance()->getNodeTypes()->getTypeOptions();
-        $parentOptions = $nodesService->getParentOptions($menu, null, $site->id);
-
-        $parentMap = NodeHelper::buildParentMap($nodes);
-
-        $menuSites = array_values(array_filter(array_map(
-            fn(int $siteId) => $sitesService->getSiteById($siteId),
-            $enabledSiteIds,
-        )));
-
-        return $this->renderTemplate('free-nav/menus/_build', [
-            'menu' => $menu,
-            'nodes' => $nodes,
-            'nodeTypes' => $nodeTypes,
-            'parentOptions' => $parentOptions,
-            'parentMap' => $parentMap,
-            'site' => $site,
-            'menuSites' => $menuSites,
-            'title' => $menu->name,
-            'canManageMenu' => $menus->canManageMenu($user, $menu),
-            'canEditNodes' => $menus->canEditNodes($user, $menu),
-            'canDeleteNodes' => $menus->canDeleteNodes($user, $menu),
-        ]);
+        return response()->json(['success' => true]);
     }
 
-    public function actionReorder(): Response
+    /**
+     * Duplicates a menu: from the menus table's actions (`{ids: [id]}`) or a menu's settings
+     * screen (`{menuId}`).
+     */
+    public function duplicate(Request $request): Response
     {
-        $this->requirePostRequest();
-        $this->requireAcceptsJson();
+        abort_unless($this->menus->canManageMenus($this->user()), 403, 'User not authorized to manage menus.');
+        $this->requireAdminChanges();
 
-        $this->_requireManageMenus();
-        $this->_requireAdminChanges();
+        $menuId = $request->integer('menuId') ?: (int) (((array) $request->input('ids', []))[0] ?? 0);
+        $newMenu = $this->menus->duplicateMenu($this->menu($menuId));
 
-        $ids = Json::decode(Craft::$app->getRequest()->getRawBody())['ids'] ?? [];
-
-        FreeNav::getInstance()->getMenus()->reorderMenus($ids);
-
-        return $this->asSuccess();
-    }
-
-    public function actionDuplicate(): Response
-    {
-        $this->requirePostRequest();
-        $this->_requireManageMenus();
-        $this->_requireAdminChanges();
-
-        $menuId = Craft::$app->getRequest()->getRequiredBodyParam('menuId');
-        $menu = FreeNav::getInstance()->getMenus()->getMenuById($menuId);
-
-        if (!$menu) {
-            throw new NotFoundHttpException('Menu not found');
+        if (! $newMenu) {
+            return $this->asFailure(t('Couldn’t duplicate the menu.', category: 'free-nav'));
         }
 
-        $newMenu = FreeNav::getInstance()->getMenus()->duplicateMenu($menu);
-
-        Craft::$app->getSession()->setNotice(Craft::t('free-nav', 'Menu duplicated.'));
-
-        return $this->redirect(UrlHelper::cpUrl('free-nav/menus/' . $newMenu->id));
-    }
-
-    public function actionSettings(): Response
-    {
-        // Plugin settings are project config, the same as Craft's own settings screens.
-        $this->requireAdmin();
-
-        $settings = FreeNav::getInstance()->getSettings();
-
-        return $this->renderTemplate('free-nav/settings/_index', [
-            'settings' => $settings,
-        ]);
-    }
-
-    public function actionSaveSettings(): ?Response
-    {
-        $this->requirePostRequest();
-        $this->requireAdmin();
-
-        $request = Craft::$app->getRequest();
-        $settings = FreeNav::getInstance()->getSettings();
-
-        $settings->cacheEnabled = (bool)$request->getBodyParam('cacheEnabled', $settings->cacheEnabled);
-        $settings->cacheDuration = (int)$request->getBodyParam('cacheDuration', $settings->cacheDuration);
-        $settings->ariaEnabled = (bool)$request->getBodyParam('ariaEnabled', $settings->ariaEnabled);
-        $settings->defaultPreset = $request->getBodyParam('defaultPreset', $settings->defaultPreset);
-        $settings->activeClass = $request->getBodyParam('activeClass', $settings->activeClass);
-        $settings->hasChildrenClass = $request->getBodyParam('hasChildrenClass', $settings->hasChildrenClass);
-        $settings->restApiEnabled = (bool)$request->getBodyParam('restApiEnabled', $settings->restApiEnabled);
-
-        if (!Craft::$app->getPlugins()->savePluginSettings(FreeNav::getInstance(), $settings->toArray())) {
-            Craft::$app->getSession()->setError(Craft::t('free-nav', 'Couldn\'t save settings.'));
-            return null;
-        }
-
-        Craft::$app->getSession()->setNotice(Craft::t('free-nav', 'Settings saved.'));
-
-        return $this->redirectToPostedUrl();
+        return $this->asSuccess(t('Menu duplicated.', category: 'free-nav'), redirect: cp_url('free-nav/menus/'.$newMenu->id));
     }
 
     // -------------------------------------------------------------------------
 
-    private function _requireManageMenus(): void
+    private function screen(Menu $menu): CpScreenResponse
     {
-        if (!FreeNav::getInstance()->getMenus()->canManageMenus(Craft::$app->getUser()->getIdentity())) {
-            throw new ForbiddenHttpException('User not authorized to manage menus.');
+        $isNew = ! $menu->id;
+        $editable = $this->menus->allowAdminChanges();
+        $title = $isNew ? t('Create a new menu', category: 'free-nav') : (string) $menu->name;
+
+        $siteValues = [];
+
+        foreach (Sites::getAllSites() as $site) {
+            $settings = $menu->getSiteSettings()[(int) $site->id] ?? null;
+            $siteValues[(string) $site->id] = ['enabled' => $settings ? $settings->enabled : $isNew];
         }
+
+        $fieldLayout = $menu->getFieldLayout();
+
+        $values = [
+            'menuId' => $menu->id,
+            'name' => $menu->name,
+            'handle' => $menu->handle,
+            'instructions' => $menu->instructions,
+            'propagationMethod' => $menu->propagationMethod,
+            'maxLevels' => $menu->maxLevels,
+            'maxNodes' => $menu->maxNodes,
+            'defaultPlacement' => $menu->defaultPlacement,
+            'sites' => $siteValues,
+            'fieldLayout' => [
+                'id' => $fieldLayout->id,
+                'uid' => $fieldLayout->uid,
+                ...($fieldLayout->getConfig() ?? []),
+            ],
+        ];
+
+        $propagationOptions = array_map(
+            fn (Propagation $case) => ['label' => $case->label(), 'value' => $case->value],
+            Propagation::cases(),
+        );
+
+        $siteNodes = [];
+
+        foreach (Sites::getAllSites() as $site) {
+            $siteNodes[] = Field::make((string) $site->name, Lightswitch::make(['sites', (string) $site->id, 'enabled']));
+        }
+
+        $ui = Ui::make([
+            ...($editable ? [] : [Callout::make('freenav-readonly', t('Menus can only be changed where admin changes are allowed.', category: 'free-nav'))->variant('warning')]),
+            Field::make(null, Hidden::make('menuId')),
+            Field::make(t('Name', category: 'free-nav'), Text::make('name'))
+                ->instructions(t('What this menu will be called in the control panel.', category: 'free-nav'))
+                ->required(),
+            Field::make(t('Handle', category: 'free-nav'), Text::make('handle'))
+                ->instructions(t('How you’ll refer to this menu in templates.', category: 'free-nav'))
+                ->required(),
+            Field::make(t('Instructions', category: 'free-nav'), Textarea::make('instructions')->rows(2))
+                ->instructions(t('Helper text to guide the author.', category: 'free-nav')),
+            Heading::make('freenav-structure', t('Structure', category: 'free-nav')),
+            Field::make(t('Propagation Method', category: 'free-nav'), Choice::make('propagationMethod')->options($propagationOptions))
+                ->instructions(t('Which sites should nodes be saved to?', category: 'free-nav')),
+            Field::make(t('Max Levels', category: 'free-nav'), Number::make('maxLevels')->min(1))
+                ->instructions(t('The maximum number of levels this menu can have.', category: 'free-nav')),
+            Field::make(t('Max Nodes', category: 'free-nav'), Number::make('maxNodes')->min(1))
+                ->instructions(t('The maximum number of nodes allowed in this menu.', category: 'free-nav')),
+            Field::make(t('Default Placement', category: 'free-nav'), Choice::make('defaultPlacement')->options([
+                ['label' => t('Beginning', category: 'free-nav'), 'value' => 'beginning'],
+                ['label' => t('End', category: 'free-nav'), 'value' => 'end'],
+            ]))->instructions(t('Where should new nodes be placed by default?', category: 'free-nav')),
+            Heading::make('freenav-sites', t('Sites', category: 'free-nav')),
+            ...$siteNodes,
+            Heading::make('freenav-layout', t('Node Fields', category: 'free-nav'))
+                ->description(t('The fields editors see when they edit a node in this menu.', category: 'free-nav')),
+            Field::make(null, FieldLayoutDesigner::make('fieldLayout')->elementType(Node::class)),
+        ]);
+
+        $context = new UiContext(
+            values: $values,
+            errors: $menu->errors()->getMessages(),
+            mode: $editable ? ControlMode::Editable : ControlMode::ReadOnly,
+        );
+
+        $response = new CpScreenResponse()
+            ->title($title)
+            ->crumbs([
+                new ActionItem()->label(t('Menus', category: 'free-nav'))->href(cp_url('free-nav/menus')),
+                new ActionItem()->label($title),
+            ])
+            ->redirectUrl(cp_url('free-nav/menus'))
+            ->ui($ui, $context, $editable ? ['submit' => ['method' => 'post', 'url' => cp_url('free-nav/menus')]] : []);
+
+        if (! $isNew) {
+            $response->addAltAction(t('Edit nodes', category: 'free-nav'), [
+                'href' => cp_url("free-nav/menus/{$menu->id}/build"),
+            ]);
+            $response->addAltAction(t('Export JSON', category: 'free-nav'), [
+                'href' => cp_url("free-nav/menus/{$menu->id}/export"),
+            ]);
+
+            if ($editable && $this->menus->canManageMenus($this->user())) {
+                $response->addAltAction(t('Duplicate', category: 'free-nav'), [
+                    'action' => [
+                        'type' => 'http',
+                        'method' => 'POST',
+                        'url' => cp_url('free-nav/menus/duplicate'),
+                        'body' => ['menuId' => $menu->id],
+                    ],
+                ]);
+                $response->addAltAction(t('Delete', category: 'free-nav'), [
+                    'variant' => 'danger',
+                    'action' => [
+                        'type' => 'http',
+                        'method' => 'DELETE',
+                        'url' => cp_url("free-nav/menus/{$menu->id}"),
+                        'confirm' => t('Delete “{name}” and all of its nodes?', ['name' => $menu->name], category: 'free-nav'),
+                    ],
+                ]);
+            }
+        }
+
+        return $response;
     }
 
-    private function _requireManageMenu(Menu $menu): void
+    private function menu(int $menuId): Menu
     {
-        if (!FreeNav::getInstance()->getMenus()->canManageMenu(Craft::$app->getUser()->getIdentity(), $menu)) {
-            throw new ForbiddenHttpException('User not authorized to manage this menu.');
-        }
+        return $this->menus->getMenuById($menuId) ?? abort(404, 'Menu not found');
+    }
+
+    private function user(): User
+    {
+        return currentUserElement() ?? abort(403);
     }
 
     /**
-     * Menus are project config, so like sections they can only change where admin changes are
-     * allowed — otherwise production drifts from what is deployed.
+     * Nodes belong to a site, so a count has to name one: the current site when the menu is
+     * enabled for it, otherwise the menu's first site — the one its tree opens on.
      */
-    private function _requireAdminChanges(): void
+    private function siteIdFor(Menu $menu): int
     {
-        if (!Craft::$app->getConfig()->getGeneral()->allowAdminChanges) {
-            throw new ForbiddenHttpException('Menus can only be changed where admin changes are allowed.');
-        }
+        return $this->nodes->getDefaultSiteId($menu);
+    }
+
+    private function requireAdminChanges(): void
+    {
+        abort_unless($this->menus->allowAdminChanges(), 403, 'Menus can only be changed where admin changes are allowed.');
     }
 }
