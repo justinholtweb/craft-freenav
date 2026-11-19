@@ -8,6 +8,7 @@ use craft\helpers\Cp;
 use craft\helpers\Json;
 use craft\web\Controller;
 use justinholt\freenav\elements\Node;
+use justinholt\freenav\enums\NodeType;
 use justinholt\freenav\FreeNav;
 use justinholt\freenav\models\Menu;
 use yii\web\BadRequestHttpException;
@@ -58,6 +59,23 @@ class NodesController extends Controller
         $nodeData = $request->getBodyParam('node', []);
         if (!is_array($nodeData)) {
             $nodeData = Json::decodeIfJson($nodeData) ?: [];
+        }
+
+        // The element picker only offers what the editor can see, but the request can name any id.
+        // Without this check an editor could link — and copy the title of — an entry, asset or
+        // product they have no access to.
+        if (!empty($nodeData['linkedElementId'])) {
+            $nodeTypeEnum = NodeType::tryFrom((string)($nodeData['nodeType'] ?? ''));
+            $elementType = $nodeTypeEnum?->elementType();
+            $element = $elementType ? Craft::$app->getElements()->getElementById(
+                (int)$nodeData['linkedElementId'],
+                $elementType,
+                isset($nodeData['siteId']) ? (int)$nodeData['siteId'] : null,
+            ) : null;
+
+            if (!$element || !$element->canView(Craft::$app->getUser()->getIdentity())) {
+                return $this->asFailure(Craft::t('free-nav', 'That element doesn’t exist, or you don’t have permission to link to it.'));
+            }
         }
 
         try {
@@ -124,7 +142,8 @@ class NodesController extends Controller
                 $elementType,
                 $siteId ? (int)$siteId : null,
             );
-            if ($element) {
+            // Only show the chip for something the editor may see; the id comes from the request.
+            if ($element && $element->canView(Craft::$app->getUser()->getIdentity())) {
                 $elements[] = $element;
             }
         }
