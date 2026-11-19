@@ -1,17 +1,21 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Services;
 
-use Craft;
-use craft\base\ElementInterface;
-use craft\helpers\Json;
+use CraftCms\Cms\Element\Contracts\ElementInterface;
+use CraftCms\Cms\Support\Facades\Elements;
+use CraftCms\Cms\Support\Json;
+use Illuminate\Support\Facades\DB;
 use JustinHoltWeb\FreeNav\Elements\Node;
 use JustinHoltWeb\FreeNav\Enums\NodeType;
-use JustinHoltWeb\FreeNav\FreeNav;
 use JustinHoltWeb\FreeNav\Models\ImportResult;
 use JustinHoltWeb\FreeNav\Models\Menu;
-use JustinHoltWeb\FreeNav\Models\MenuSiteSettings;
-use yii\base\Component;
+use RuntimeException;
+use Throwable;
+
+use function CraftCms\Cms\t;
 
 /**
  * Menu JSON export and import, shared by the control panel and the console.
@@ -19,14 +23,38 @@ use yii\base\Component;
  * A menu's *definition* is project config, its *nodes* are content. So importing nodes into a
  * menu that already exists (`replace`) works anywhere, while an import that has to create the
  * menu needs `allowAdminChanges`, the same as creating one in the control panel.
+ *
+ * Files exported by FreeNav 5 import unchanged: their Craft 5 element class names are mapped to
+ * Craft 6's, and category links are looked up as entries (Craft's category-to-entry conversion
+ * keeps each element's ID and UID).
  */
-class MenuTransfer extends Component
+class MenuTransfer
 {
-    public const FORMAT_VERSION = '1.2.0';
+    public const string FORMAT_VERSION = '1.2.0';
 
     /** Deeper than any real menu; stops a hand-edited file recursing without end. */
-    private const MAX_DEPTH = 32;
+    private const int MAX_DEPTH = 32;
 
+    /**
+     * The element classes a FreeNav 5 export may name, mapped to the node type that links to the
+     * same elements on Craft 6.
+     */
+    private const array LEGACY_ELEMENT_TYPES = [
+        'craft\\elements\\Entry' => NodeType::Entry,
+        'craft\\elements\\Category' => NodeType::Entry,
+        'craft\\elements\\Asset' => NodeType::Asset,
+        'craft\\commerce\\elements\\Product' => NodeType::Product,
+    ];
+
+    public function __construct(
+        private readonly Menus $menus,
+        private readonly Nodes $nodes,
+        private readonly MenuCache $menuCache,
+    ) {}
+
+    /**
+     * @return array<string, mixed>
+     */
     public function exportMenu(Menu $menu): array
     {
         return [
@@ -38,28 +66,33 @@ class MenuTransfer extends Component
                 'maxNodes' => $menu->maxNodes,
                 'maxLevels' => $menu->maxLevels,
             ],
-            'nodes' => $this->_exportTree(FreeNav::getInstance()->getNodes()->findNodesInMenu($menu->id)->all()),
+            'nodes' => $this->exportTree($this->nodes->findNodesInMenu((int) $menu->id)->all()),
         ];
     }
 
+    /**
+     * @param  array<string, mixed>  $export
+     */
     public function encode(array $export): string
     {
-        return Json::encode($export, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n";
+        return Json::encode($export, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n";
     }
 
     /**
      * Decodes an export file, or returns null when it isn't one.
+     *
+     * @return array<string, mixed>|null
      */
     public function decode(string $json): ?array
     {
         $data = Json::decodeIfJson($json);
 
         if (
-            !is_array($data)
-            || !isset($data['freeNav'], $data['menu'], $data['nodes'])
-            || !is_array($data['menu'])
-            || !is_array($data['nodes'])
-            || !is_string($data['menu']['handle'] ?? null)
+            ! is_array($data)
+            || ! isset($data['freeNav'], $data['menu'], $data['nodes'])
+            || ! is_array($data['menu'])
+            || ! is_array($data['nodes'])
+            || ! is_string($data['menu']['handle'] ?? null)
         ) {
             return null;
         }
@@ -79,129 +112,128 @@ class MenuTransfer extends Component
      *
      * Every node is checked before anything is written — custom URLs through the same rule the
      * node editor uses — and the node writes run in one transaction, so a bad file changes nothing.
+     * Custom attributes with unsafe names or non-text values are dropped.
+     *
+     * @param  array<string, mixed>  $data
      */
     public function importMenu(array $data, ?string $handle = null, bool $replace = false, bool $renameOnConflict = false): ImportResult
     {
-        $result = new ImportResult();
-        $menus = FreeNav::getInstance()->getMenus();
+        $result = new ImportResult;
         $menuData = $data['menu'];
-        $handle = $handle ?: (string)$menuData['handle'];
+        $handle = $handle ?: (string) $menuData['handle'];
         $name = is_string($menuData['name'] ?? null) && $menuData['name'] !== '' ? $menuData['name'] : $handle;
 
-        $menu = $menus->getMenuByHandle($handle);
+        $menu = $this->menus->getMenuByHandle($handle);
 
         if ($menu && $renameOnConflict) {
-            [$handle, $name] = $this->_freeHandle($handle, $name);
+            [$handle, $name] = $this->freeHandle($handle, $name);
             $menu = null;
-        } elseif ($menu && !$replace) {
+        } elseif ($menu && ! $replace) {
             $result->menu = $menu;
-            $result->errors[] = Craft::t('free-nav', 'A menu with the handle “{handle}” already exists. Replace its nodes, or import under another handle.', ['handle' => $handle]);
+            $result->errors[] = t('A menu with the handle “{handle}” already exists. Replace its nodes, or import under another handle.', ['handle' => $handle], category: 'free-nav');
 
             return $result;
         }
 
-        if (!$menu && !Craft::$app->getConfig()->getGeneral()->allowAdminChanges) {
-            $result->errors[] = Craft::t('free-nav', 'There is no menu with the handle “{handle}”, and menus can only be created where admin changes are allowed. Create the menu there first (project config will bring it here), then import its nodes.', ['handle' => $handle]);
+        if (! $menu && ! $this->menus->allowAdminChanges()) {
+            $result->errors[] = t('There is no menu with the handle “{handle}”, and menus can only be created where admin changes are allowed. Create the menu there first (project config will bring it here), then import its nodes.', ['handle' => $handle], category: 'free-nav');
 
             return $result;
         }
 
         // Settings the new menu would get, so the limits can be checked before it exists.
         $limits = $menu ?? new Menu([
-            'maxNodes' => is_numeric($menuData['maxNodes'] ?? null) ? (int)$menuData['maxNodes'] : null,
-            'maxLevels' => is_numeric($menuData['maxLevels'] ?? null) ? (int)$menuData['maxLevels'] : null,
+            'maxNodes' => is_numeric($menuData['maxNodes'] ?? null) ? (int) $menuData['maxNodes'] : null,
+            'maxLevels' => is_numeric($menuData['maxLevels'] ?? null) ? (int) $menuData['maxLevels'] : null,
         ]);
 
-        $plan = $this->_plan($data['nodes'], $menu, $result);
-        $this->_checkLimits($plan, $limits, $result);
+        $plan = $this->plan($data['nodes'], $menu, $result);
+        $this->checkLimits($plan, $limits, $result);
 
-        if (!$result->getSuccess()) {
+        if (! $result->getSuccess()) {
             return $result;
         }
 
-        if (!$menu) {
-            $menu = new Menu();
+        if (! $menu) {
+            $menu = new Menu;
             $menu->name = $name;
             $menu->handle = $handle;
             $menu->propagationMethod = is_string($menuData['propagationMethod'] ?? null) ? $menuData['propagationMethod'] : 'all';
             $menu->maxNodes = $limits->maxNodes;
             $menu->maxLevels = $limits->maxLevels;
+            $menu->setSiteSettings($this->menus->allSitesSettings());
 
-            $siteSettings = [];
-            foreach (Craft::$app->getSites()->getAllSites() as $site) {
-                $siteSettings[$site->id] = new MenuSiteSettings(['siteId' => $site->id, 'enabled' => true]);
-            }
-            $menu->setSiteSettings($siteSettings);
-
-            if (!$menus->saveMenu($menu)) {
+            if (! $this->menus->saveMenu($menu)) {
                 foreach ($menu->getFirstErrors() as $error) {
-                    $result->errors[] = $error;
+                    $result->errors[] = (string) $error;
                 }
 
                 return $result;
             }
 
-            $menu = $menus->getMenuById($menu->id) ?? $menu;
+            $menu = $this->menus->getMenuById((int) $menu->id) ?? $menu;
             $result->createdMenu = true;
         }
 
         $result->menu = $menu;
 
-        $transaction = Craft::$app->getDb()->beginTransaction();
-
         try {
-            if ($replace && !$result->createdMenu) {
-                // Deepest first, so no node outlives its parent mid-way.
-                $existing = array_reverse(FreeNav::getInstance()->getNodes()->findNodesInMenu($menu->id)->all());
+            DB::transaction(function () use ($menu, $replace, $plan, $result) {
+                if ($replace && ! $result->createdMenu) {
+                    // Deepest first, so no node outlives its parent mid-way.
+                    $existing = array_reverse($this->nodes->findNodesInMenu((int) $menu->id)->all());
 
-                foreach ($existing as $node) {
-                    if (!Craft::$app->getElements()->deleteElement($node)) {
-                        throw new \RuntimeException("Couldn't remove node #$node->id.");
+                    foreach ($existing as $node) {
+                        if (! Elements::deleteElement($node)) {
+                            throw new RuntimeException("Couldn't remove node #{$node->id}.");
+                        }
+
+                        $result->nodesRemoved++;
                     }
-                    $result->nodesRemoved++;
                 }
-            }
 
-            $this->_write($menu, $plan, null, $result);
-            $transaction->commit();
-        } catch (\Throwable $e) {
-            $transaction->rollBack();
+                $this->write($menu, $plan, null, $result);
+            });
+        } catch (Throwable $e) {
             $result->nodesImported = 0;
             $result->nodesRemoved = 0;
             $result->errors[] = $e->getMessage();
 
             // All or nothing: don't leave behind an empty menu the import made.
             if ($result->createdMenu) {
-                FreeNav::getInstance()->getMenus()->deleteMenu($menu);
+                $this->menus->deleteMenu($menu);
                 $result->menu = null;
                 $result->createdMenu = false;
             }
         }
 
-        FreeNav::getInstance()->getMenuCache()->invalidate($menu->handle);
+        $this->menuCache->invalidate((string) $menu->handle);
 
         return $result;
     }
 
     /**
-     * Nodes come back in structure order, so each node's children are the run of deeper
-     * nodes straight after it.
+     * Nodes come back in structure order, so each node's children are the run of deeper nodes
+     * straight after it.
+     *
+     * @param  Node[]  $nodes
+     * @return list<array<string, mixed>>
      */
-    private function _exportTree(array $nodes, int &$i = 0, int $level = 1): array
+    private function exportTree(array $nodes, int &$i = 0, int $level = 1): array
     {
         $items = [];
 
         while ($i < count($nodes)) {
             $node = $nodes[$i];
-            $nodeLevel = (int)($node->level ?? 1);
+            $nodeLevel = (int) ($node->level ?? 1);
 
             if ($nodeLevel < $level) {
                 break;
             }
 
             $i++;
-            $item = $this->_exportNode($node);
-            $children = $this->_exportTree($nodes, $i, $nodeLevel + 1);
+            $item = $this->exportNode($node);
+            $children = $this->exportTree($nodes, $i, $nodeLevel + 1);
 
             if ($children !== []) {
                 $item['children'] = $children;
@@ -213,7 +245,10 @@ class MenuTransfer extends Component
         return $items;
     }
 
-    private function _exportNode(Node $node): array
+    /**
+     * @return array<string, mixed>
+     */
+    private function exportNode(Node $node): array
     {
         $data = [
             'title' => $node->title,
@@ -243,79 +278,88 @@ class MenuTransfer extends Component
     /**
      * Turns the file's nodes into unsaved, validated Node models, collecting every problem.
      *
-     * @return array<int, array{node: Node, children: array}>
+     * @param  array<mixed>  $items
+     * @return list<array{node: Node, children: array<mixed>}>
      */
-    private function _plan(array $items, ?Menu $menu, ImportResult $result, int $depth = 1, string $path = ''): array
+    private function plan(array $items, ?Menu $menu, ImportResult $result, int $depth = 1, string $path = ''): array
     {
         $plan = [];
 
         if ($depth > self::MAX_DEPTH) {
-            $result->errors[] = Craft::t('free-nav', 'Nodes are nested more than {max} levels deep.', ['max' => self::MAX_DEPTH]);
+            $result->errors[] = t('Nodes are nested more than {max} levels deep.', ['max' => self::MAX_DEPTH], category: 'free-nav');
 
             return $plan;
         }
 
         foreach (array_values($items) as $i => $item) {
-            $label = ltrim($path . '/' . ($i + 1), '/');
+            $label = ltrim($path.'/'.($i + 1), '/');
 
-            if (!is_array($item)) {
-                $result->errors[] = Craft::t('free-nav', 'Node {path} is not an object.', ['path' => $label]);
+            if (! is_array($item)) {
+                $result->errors[] = t('Node {path} is not an object.', ['path' => $label], category: 'free-nav');
+
                 continue;
             }
 
-            $type = NodeType::tryFrom((string)($item['nodeType'] ?? NodeType::Custom->value));
+            $typeValue = is_scalar($item['nodeType'] ?? null) ? (string) $item['nodeType'] : NodeType::Custom->value;
+            $type = NodeType::tryFrom($typeValue);
 
-            if (!$type) {
-                $result->errors[] = Craft::t('free-nav', 'Node {path} has an unknown type “{type}”.', ['path' => $label, 'type' => (string)$item['nodeType']]);
+            if (! $type) {
+                $result->errors[] = t('Node {path} has an unknown type “{type}”.', ['path' => $label, 'type' => $typeValue], category: 'free-nav');
+
                 continue;
             }
 
-            $node = new Node();
-            $node->menuId = $menu?->id;
-            $node->title = is_scalar($item['title'] ?? null) ? trim((string)$item['title']) : '';
+            // Craft 6 has no categories; Craft's conversion turned them into entries.
+            if ($type === NodeType::Category) {
+                $type = NodeType::Entry;
+            }
+
+            $node = new Node;
+            $node->menuId = $menu->id ?? 0;
+            $node->title = is_scalar($item['title'] ?? null) ? trim((string) $item['title']) : '';
             $node->nodeType = $type->value;
             // 'url' is accepted for backwards compatibility with older exports
-            $node->customUrl = $this->_string($item['customUrl'] ?? $item['url'] ?? null);
-            $node->classes = $this->_string($item['classes'] ?? null);
-            $node->urlSuffix = $this->_string($item['urlSuffix'] ?? null);
-            $node->customAttributes = $this->_array($item['customAttributes'] ?? null);
-            $node->data = $this->_array($item['data'] ?? null);
-            $node->visibilityRules = $this->_array($item['visibilityRules'] ?? null);
-            $node->newWindow = (bool)($item['newWindow'] ?? false);
-            $node->icon = $this->_string($item['icon'] ?? null);
-            $node->badge = $this->_string($item['badge'] ?? null);
-            $node->enabled = (bool)($item['enabled'] ?? true);
+            $node->customUrl = $this->string($item['customUrl'] ?? $item['url'] ?? null);
+            $node->classes = $this->string($item['classes'] ?? null);
+            $node->urlSuffix = $this->string($item['urlSuffix'] ?? null);
+            $node->customAttributes = Node::safeCustomAttributes($this->array($item['customAttributes'] ?? null));
+            $node->data = $this->array($item['data'] ?? null);
+            $node->visibilityRules = $this->array($item['visibilityRules'] ?? null);
+            $node->newWindow = (bool) ($item['newWindow'] ?? false);
+            $node->icon = $this->string($item['icon'] ?? null);
+            $node->badge = $this->string($item['badge'] ?? null);
+            $node->enabled = (bool) ($item['enabled'] ?? true);
 
-            $element = $this->_linkedElement($type, $item);
+            $element = $this->linkedElement($type, $item);
 
             if ($element) {
                 $node->linkedElementId = $element->id;
 
                 if ($node->title === '') {
-                    $node->title = (string)($element->title ?? '');
+                    $node->title = (string) ($element->title ?? '');
                 }
             } elseif ($type->isElement()) {
-                $result->warnings[] = Craft::t('free-nav', 'Node {path} (“{title}”) links to a {type} that doesn’t exist here; it will have no link until one is chosen.', [
+                $result->warnings[] = t('Node {path} (“{title}”) links to a {type} that doesn’t exist here; it will have no link until one is chosen.', [
                     'path' => $label,
                     'title' => $node->title,
                     'type' => strtolower($type->label()),
-                ]);
+                ], category: 'free-nav');
             }
 
             if ($node->title === '') {
-                $result->errors[] = Craft::t('free-nav', 'Node {path} has no title.', ['path' => $label]);
+                $result->errors[] = t('Node {path} has no title.', ['path' => $label], category: 'free-nav');
             }
 
-            if (!$node->validate(['customUrl'])) {
-                $result->errors[] = Craft::t('free-nav', 'Node {path} (“{title}”): {error}', [
+            if (! $node->validate(['customUrl'])) {
+                $result->errors[] = t('Node {path} (“{title}”): {error}', [
                     'path' => $label,
                     'title' => $node->title,
-                    'error' => $node->getFirstError('customUrl'),
-                ]);
+                    'error' => $node->errors()->first('customUrl'),
+                ], category: 'free-nav');
             }
 
             $children = isset($item['children']) && is_array($item['children'])
-                ? $this->_plan($item['children'], $menu, $result, $depth + 1, $label)
+                ? $this->plan($item['children'], $menu, $result, $depth + 1, $label)
                 : [];
 
             $plan[] = ['node' => $node, 'children' => $children];
@@ -325,49 +369,56 @@ class MenuTransfer extends Component
     }
 
     /**
-     * Only an element of the class the node type links to — the file names the class, and
-     * that must never reach an arbitrary class's `find()`.
+     * Only an element of the class the node type links to — the file names the class, and that
+     * must never reach an arbitrary class's `find()`.
+     *
+     * @param  array<mixed>  $item
      */
-    private function _linkedElement(NodeType $type, array $item): ?ElementInterface
+    private function linkedElement(NodeType $type, array $item): ?ElementInterface
     {
         $elementType = $type->elementType();
         $uid = $item['linkedElementUid'] ?? null;
 
-        if (!$elementType || !is_string($uid) || $uid === '' || !class_exists($elementType)) {
+        if (! $elementType || ! is_string($uid) || $uid === '' || ! class_exists($elementType)) {
             return null;
         }
 
-        if (isset($item['linkedElementType']) && $item['linkedElementType'] !== $elementType) {
+        $named = $item['linkedElementType'] ?? null;
+
+        if ($named !== null && $named !== $elementType && (self::LEGACY_ELEMENT_TYPES[$named] ?? null) !== $type) {
             return null;
         }
 
-        /** @var class-string<ElementInterface> $elementType */
         return $elementType::find()->uid($uid)->status(null)->site('*')->unique()->one();
     }
 
-    private function _checkLimits(array $plan, Menu $menu, ImportResult $result): void
+    /**
+     * @param  list<array{node: Node, children: array<mixed>}>  $plan
+     */
+    private function checkLimits(array $plan, Menu $menu, ImportResult $result): void
     {
-        [$count, $depth] = $this->_measure($plan);
+        [$count, $depth] = $this->measure($plan);
 
         if ($menu->maxNodes && $count > $menu->maxNodes) {
-            $result->errors[] = Craft::t('free-nav', 'The file has {count} nodes; the menu allows {max}.', ['count' => $count, 'max' => $menu->maxNodes]);
+            $result->errors[] = t('The file has {count} nodes; the menu allows {max}.', ['count' => $count, 'max' => $menu->maxNodes], category: 'free-nav');
         }
 
         if ($menu->maxLevels && $depth > $menu->maxLevels) {
-            $result->errors[] = Craft::t('free-nav', 'The file nests nodes {depth} levels deep; the menu allows {max}.', ['depth' => $depth, 'max' => $menu->maxLevels]);
+            $result->errors[] = t('The file nests nodes {depth} levels deep; the menu allows {max}.', ['depth' => $depth, 'max' => $menu->maxLevels], category: 'free-nav');
         }
     }
 
     /**
+     * @param  array<mixed>  $plan
      * @return array{int, int} node count, deepest level
      */
-    private function _measure(array $plan, int $level = 1): array
+    private function measure(array $plan, int $level = 1): array
     {
         $count = 0;
         $depth = $plan ? $level : 0;
 
         foreach ($plan as $entry) {
-            [$c, $d] = $this->_measure($entry['children'], $level + 1);
+            [$c, $d] = $this->measure($entry['children'], $level + 1);
             $count += 1 + $c;
             $depth = max($depth, $d);
         }
@@ -375,10 +426,12 @@ class MenuTransfer extends Component
         return [$count, $depth];
     }
 
-    private function _write(Menu $menu, array $plan, ?Node $parent, ImportResult $result): void
+    /**
+     * @param  array<mixed>  $plan
+     */
+    private function write(Menu $menu, array $plan, ?Node $parent, ImportResult $result): void
     {
-        $nodes = FreeNav::getInstance()->getNodes();
-        $siteId = $nodes->getDefaultSiteId($menu);
+        $siteId = $this->nodes->getDefaultSiteId($menu);
 
         foreach ($plan as $entry) {
             /** @var Node $node */
@@ -386,44 +439,46 @@ class MenuTransfer extends Component
             $node->menuId = $menu->id;
             $node->siteId = $siteId;
 
-            if (!Craft::$app->getElements()->saveElement($node)) {
-                throw new \RuntimeException(Craft::t('free-nav', 'Couldn’t save node “{title}”: {error}', [
+            if (! Elements::saveElement($node)) {
+                throw new RuntimeException(t('Couldn’t save node “{title}”: {error}', [
                     'title' => $node->title,
                     'error' => implode(' ', $node->getFirstErrors()),
-                ]));
+                ], category: 'free-nav'));
             }
 
-            if (!$nodes->placeNode($menu, $node, $parent)) {
-                throw new \RuntimeException(Craft::t('free-nav', 'Couldn’t place node “{title}” in the menu.', ['title' => $node->title]));
+            if (! $this->nodes->placeNode($menu, $node, $parent)) {
+                throw new RuntimeException(t('Couldn’t place node “{title}” in the menu.', ['title' => $node->title], category: 'free-nav'));
             }
 
             $result->nodesImported++;
-            $this->_write($menu, $entry['children'], $node, $result);
+            $this->write($menu, $entry['children'], $node, $result);
         }
     }
 
     /**
      * @return array{string, string} a handle and name no menu uses yet
      */
-    private function _freeHandle(string $handle, string $name): array
+    private function freeHandle(string $handle, string $name): array
     {
-        $menus = FreeNav::getInstance()->getMenus();
-        $candidate = $handle . '_imported';
+        $candidate = $handle.'_imported';
         $i = 2;
 
-        while ($menus->getMenuByHandle($candidate)) {
-            $candidate = $handle . '_imported' . $i++;
+        while ($this->menus->getMenuByHandle($candidate)) {
+            $candidate = $handle.'_imported'.$i++;
         }
 
-        return [$candidate, $name . ' (' . Craft::t('free-nav', 'Imported') . ')'];
+        return [$candidate, $name.' ('.t('Imported', category: 'free-nav').')'];
     }
 
-    private function _string(mixed $value): ?string
+    private function string(mixed $value): ?string
     {
-        return is_scalar($value) && (string)$value !== '' ? (string)$value : null;
+        return is_scalar($value) && (string) $value !== '' ? (string) $value : null;
     }
 
-    private function _array(mixed $value): ?array
+    /**
+     * @return array<mixed>|null
+     */
+    private function array(mixed $value): ?array
     {
         if (is_string($value)) {
             $value = Json::decodeIfJson($value);

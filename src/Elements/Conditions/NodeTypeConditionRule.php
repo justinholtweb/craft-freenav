@@ -1,21 +1,26 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Elements\Conditions;
 
-use Craft;
-use craft\base\conditions\BaseMultiSelectConditionRule;
-use craft\base\ElementInterface;
-use craft\elements\conditions\ElementConditionRuleInterface;
-use craft\elements\db\ElementQueryInterface;
-use JustinHoltWeb\FreeNav\Elements\Queries\NodeQuery;
+use CraftCms\Cms\Condition\BaseMultiSelectConditionRule;
+use CraftCms\Cms\Element\Conditions\Contracts\ElementConditionRuleInterface;
+use CraftCms\Cms\Element\Conditions\Contracts\ElementQueryConditionRuleInterface;
+use CraftCms\Cms\Element\Contracts\ElementInterface;
+use CraftCms\Cms\Element\Queries\Contracts\ElementQueryInterface;
+use Illuminate\Database\Query\Builder;
 use JustinHoltWeb\FreeNav\Elements\Node;
+use JustinHoltWeb\FreeNav\Elements\Queries\NodeQuery;
 use JustinHoltWeb\FreeNav\Enums\NodeType;
 
-class NodeTypeConditionRule extends BaseMultiSelectConditionRule implements ElementConditionRuleInterface
+use function CraftCms\Cms\t;
+
+class NodeTypeConditionRule extends BaseMultiSelectConditionRule implements ElementConditionRuleInterface, ElementQueryConditionRuleInterface
 {
     public function getLabel(): string
     {
-        return Craft::t('free-nav', 'Node Type');
+        return t('Node Type', category: 'free-nav');
     }
 
     public function getExclusiveQueryParams(): array
@@ -28,24 +33,19 @@ class NodeTypeConditionRule extends BaseMultiSelectConditionRule implements Elem
         $options = [];
 
         foreach (NodeType::cases() as $type) {
-            $options[] = [
-                'label' => $type->label(),
-                'value' => $type->value,
-            ];
+            $options[] = ['label' => $type->label(), 'value' => $type->value];
         }
 
         return $options;
     }
 
-    public function modifyQuery(ElementQueryInterface $query): void
+    public function modifyQuery(Builder $query, ElementQueryInterface $elementQuery): void
     {
-        /** @var NodeQuery $query */
-        $query->nodeType($this->paramValue());
+        NodeQuery::applyNodeType($query, $this->paramValue());
     }
 
     public function matchElement(ElementInterface $element): bool
     {
-        /** @var Node $element */
-        return $this->matchValue($element->nodeType);
+        return $element instanceof Node && $this->matchValue($element->nodeType);
     }
 }

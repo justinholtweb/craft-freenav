@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Enums;
 
 enum Preset: string
@@ -25,6 +27,15 @@ enum Preset: string
 
     public function templateName(): string
     {
-        return '_' . $this->value;
+        return '_'.$this->value;
+    }
+
+    /**
+     * The site template the preset renders, under FreeNav's `_freenav` template root. A project's
+     * own `templates/_freenav/_presets/_<name>.twig` is found first, so a preset can be overridden.
+     */
+    public function templatePath(): string
+    {
+        return '_freenav/_presets/'.$this->templateName();
     }
 }

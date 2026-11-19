@@ -1,35 +1,32 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\FieldLayoutElements;
 
-use Craft;
-use craft\base\ElementInterface;
-use craft\fieldlayoutelements\BaseNativeField;
-use JustinHoltWeb\FreeNav\Elements\Node;
+use CraftCms\Cms\Element\Contracts\ElementInterface;
+use CraftCms\Cms\FieldLayout\LayoutElements\TextField;
+use Override;
 
-class IconField extends BaseNativeField
+use function CraftCms\Cms\t;
+
+class IconField extends TextField
 {
     public string $attribute = 'icon';
+
     public bool $requirable = false;
 
-    public function defaultLabel(?ElementInterface $element = null, bool $static = false): ?string
+    public ?string $placeholder = 'fa-home';
+
+    #[Override]
+    protected function defaultLabel(?ElementInterface $element = null, bool $static = false): ?string
     {
-        return Craft::t('free-nav', 'Icon Class');
+        return t('Icon Class', category: 'free-nav');
     }
 
-    public function instructions(?ElementInterface $element = null, bool $static = false): ?string
+    #[Override]
+    protected function defaultInstructions(?ElementInterface $element = null, bool $static = false): ?string
     {
-        return Craft::t('free-nav', 'CSS icon class (e.g., "fa-home", "icon-menu").');
-    }
-
-    protected function inputHtml(?ElementInterface $element = null, bool $static = false): ?string
-    {
-        /** @var Node|null $element */
-        return Craft::$app->getView()->renderTemplate('_includes/forms/text', [
-            'id' => 'icon',
-            'name' => 'icon',
-            'value' => $element?->icon ?? '',
-            'placeholder' => 'fa-home',
-        ]);
+        return t('CSS icon class (e.g., "fa-home", "icon-menu").', category: 'free-nav');
     }
 }

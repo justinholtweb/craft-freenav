@@ -1,29 +1,36 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\FieldLayoutElements;
 
-use Craft;
-use craft\base\ElementInterface;
-use craft\fieldlayoutelements\BaseNativeField;
-use JustinHoltWeb\FreeNav\Elements\Node;
+use CraftCms\Cms\Element\Contracts\ElementInterface;
+use CraftCms\Cms\FieldLayout\FieldLayoutElementContext;
+use CraftCms\Cms\FieldLayout\LayoutElements\BaseNativeField;
+use CraftCms\Cms\Ui\Contracts\Control;
+use CraftCms\Cms\Ui\Controls\Lightswitch;
+use CraftCms\Cms\Ui\Enums\ControlMode;
+use Override;
+
+use function CraftCms\Cms\t;
 
 class NewWindowField extends BaseNativeField
 {
     public string $attribute = 'newWindow';
+
     public bool $requirable = false;
 
-    public function defaultLabel(?ElementInterface $element = null, bool $static = false): ?string
+    #[Override]
+    protected function defaultLabel(?ElementInterface $element = null, bool $static = false): ?string
     {
-        return Craft::t('free-nav', 'Open in New Window');
+        return t('Open in New Window', category: 'free-nav');
     }
 
-    protected function inputHtml(?ElementInterface $element = null, bool $static = false): ?string
+    #[Override]
+    protected function uiControl(FieldLayoutElementContext $context): ?Control
     {
-        /** @var Node|null $element */
-        return Craft::$app->getView()->renderTemplate('_includes/forms/lightswitch', [
-            'id' => 'newWindow',
-            'name' => 'newWindow',
-            'on' => $element?->newWindow ?? false,
-        ]);
+        return Lightswitch::make($this->attribute())
+            ->value((bool) $this->value($context->element))
+            ->mode($context->mode === ControlMode::Editable ? ControlMode::Editable : ControlMode::ReadOnly);
     }
 }

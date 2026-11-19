@@ -1,14 +1,21 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Services;
 
-use Craft;
-use craft\elements\Category;
-use craft\elements\Entry;
-use yii\base\Component;
+use CraftCms\Cms\Element\Contracts\ElementInterface;
+use CraftCms\Cms\Entry\Elements\Entry;
 
-class Breadcrumbs extends Component
+class Breadcrumbs
 {
+    /**
+     * Breadcrumbs for the current page, or for `uri` when the options name one (the REST API's
+     * `get-breadcrumbs?uri=…`).
+     *
+     * @param  array<string, mixed>  $options
+     * @return list<array{title: string, url: string, segment: string, element: ElementInterface|null, isHome: bool, isCurrent: bool}>
+     */
     public function generate(array $options = []): array
     {
         $options = array_merge([
@@ -16,47 +23,46 @@ class Breadcrumbs extends Component
             'homeUrl' => '/',
             'includeHome' => true,
             'includeCurrent' => true,
+            'uri' => null,
         ], $options);
 
-        $request = Craft::$app->getRequest();
-
-        if ($request->getIsConsoleRequest()) {
+        if (is_string($options['uri'])) {
+            $uri = trim($options['uri'], '/');
+        } elseif (app()->runningInConsole()) {
             return [];
+        } else {
+            $uri = trim(request()->craftPath(), '/');
         }
 
-        $uri = trim($request->getPathInfo(), '/');
-        $segments = $uri ? explode('/', $uri) : [];
+        $segments = $uri !== '' ? explode('/', $uri) : [];
         $breadcrumbs = [];
 
-        // Home
         if ($options['includeHome']) {
             $breadcrumbs[] = [
-                'title' => $options['homeLabel'],
-                'url' => $options['homeUrl'],
+                'title' => (string) $options['homeLabel'],
+                'url' => (string) $options['homeUrl'],
                 'segment' => '',
                 'element' => null,
                 'isHome' => true,
-                'isCurrent' => empty($segments),
+                'isCurrent' => $segments === [],
             ];
         }
 
-        // Build breadcrumbs from URL segments
         $builtPath = '';
 
         foreach ($segments as $index => $segment) {
-            $builtPath .= ($builtPath ? '/' : '') . $segment;
-            $isLast = ($index === count($segments) - 1);
+            $builtPath .= ($builtPath !== '' ? '/' : '').$segment;
+            $isLast = $index === count($segments) - 1;
 
-            if ($isLast && !$options['includeCurrent']) {
+            if ($isLast && ! $options['includeCurrent']) {
                 continue;
             }
 
-            // Try to resolve segment to an element
-            $element = $this->_resolveSegmentToElement($builtPath);
+            $element = $this->resolveSegmentToElement($builtPath);
 
             $breadcrumbs[] = [
-                'title' => $element ? $element->title : $this->_segmentToTitle($segment),
-                'url' => '/' . $builtPath,
+                'title' => $element ? (string) $element->title : self::segmentToTitle($segment),
+                'url' => '/'.$builtPath,
                 'segment' => $segment,
                 'element' => $element,
                 'isHome' => false,
@@ -67,34 +73,20 @@ class Breadcrumbs extends Component
         return $breadcrumbs;
     }
 
-    private function _resolveSegmentToElement(string $uri): ?\craft\base\Element
+    /**
+     * The live entry at a URI. Craft 6 has no categories, so entries are all there is to find —
+     * categories converted to entries are found like any other entry.
+     */
+    private function resolveSegmentToElement(string $uri): ?ElementInterface
     {
-        // Try to find an entry with this URI
-        $entry = Entry::find()
-            ->uri($uri)
-            ->status('enabled')
-            ->one();
-
-        if ($entry) {
-            return $entry;
-        }
-
-        // Try categories
-        $category = Category::find()
-            ->uri($uri)
-            ->status('enabled')
-            ->one();
-
-        if ($category) {
-            return $category;
-        }
-
-        return null;
+        return Entry::find()->uri($uri)->status('enabled')->one();
     }
 
-    private function _segmentToTitle(string $segment): string
+    /**
+     * Converts a slug to title case: "about-us" -> "About Us".
+     */
+    public static function segmentToTitle(string $segment): string
     {
-        // Convert slug to title case: "about-us" -> "About Us"
         return ucwords(str_replace(['-', '_'], ' ', $segment));
     }
 }

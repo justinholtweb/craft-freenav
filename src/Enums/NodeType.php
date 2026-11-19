@@ -1,20 +1,36 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Enums;
 
-use craft\elements\Asset;
-use craft\elements\Category;
-use craft\elements\Entry;
+use CraftCms\Cms\Asset\Elements\Asset;
+use CraftCms\Cms\Element\Contracts\ElementInterface;
+use CraftCms\Cms\Entry\Elements\Entry;
 
-enum NodeType : string
+enum NodeType: string
 {
     case Entry = 'entry';
+
+    /**
+     * Craft 6 has no categories. The case stays so a menu saved by FreeNav 5 can still be read; the
+     * upgrade migration turns category nodes into entry nodes (Craft's entrify keeps element IDs) or,
+     * failing that, into custom URL nodes. It is never offered for new nodes.
+     */
     case Category = 'category';
+
     case Asset = 'asset';
     case Product = 'product';
     case Custom = 'custom';
     case Passive = 'passive';
     case Site = 'site';
+
+    /**
+     * TODO(commerce-6): Commerce 6 isn't installable yet, so this follows Craft 6's
+     * `<Domain>\Elements\<Element>` layout and is a guess. Until it's confirmed, `class_exists()`
+     * fails and product nodes simply aren't offered. It was `craft\commerce\elements\Product`.
+     */
+    public const string COMMERCE_PRODUCT_CLASS = 'CraftCms\\Commerce\\Product\\Elements\\Product';
 
     public function label(): string
     {
@@ -44,10 +60,7 @@ enum NodeType : string
 
     public function hasUrl(): bool
     {
-        return match ($this) {
-            self::Passive => false,
-            default => true,
-        };
+        return $this !== self::Passive;
     }
 
     public function hasTitle(): bool
@@ -63,20 +76,28 @@ enum NodeType : string
         };
     }
 
+    /**
+     * Whether new nodes of this type can be created on this install.
+     */
+    public function isAvailable(): bool
+    {
+        return match ($this) {
+            self::Category => false,
+            self::Product => $this->elementType() !== null,
+            default => true,
+        };
+    }
+
+    /**
+     * @return class-string<ElementInterface>|null
+     */
     public function elementType(): ?string
     {
         return match ($this) {
             self::Entry => Entry::class,
-            self::Category => Category::class,
             self::Asset => Asset::class,
-            self::Product => $this->_commerceProductClass(),
+            self::Product => class_exists(self::COMMERCE_PRODUCT_CLASS) ? self::COMMERCE_PRODUCT_CLASS : null,
             default => null,
         };
-    }
-
-    private function _commerceProductClass(): ?string
-    {
-        $class = 'craft\\commerce\\elements\\Product';
-        return class_exists($class) ? $class : null;
     }
 }

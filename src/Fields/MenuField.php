@@ -1,77 +1,94 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Fields;
 
-use Craft;
-use craft\base\ElementInterface;
-use craft\base\Field;
-use craft\base\PreviewableFieldInterface;
-use JustinHoltWeb\FreeNav\FreeNav;
+use CraftCms\Cms\Element\Contracts\ElementInterface;
+use CraftCms\Cms\Field\Contracts\PreviewableFieldInterface;
+use CraftCms\Cms\Field\Field;
+use CraftCms\Cms\Field\FieldContext;
+use CraftCms\Cms\Support\Html;
+use CraftCms\Cms\Support\Query;
+use CraftCms\Cms\Ui\Contracts\Control;
+use CraftCms\Cms\Ui\Controls\Choice;
+use JustinHoltWeb\FreeNav\Services\Menus;
+use Override;
 
+use function CraftCms\Cms\t;
+
+/**
+ * Lets editors pick a menu. The value is the menu's handle, so templates can do
+ * `craft.freenav.render(entry.myMenuField)`.
+ */
 class MenuField extends Field implements PreviewableFieldInterface
 {
+    #[Override]
     public static function displayName(): string
     {
-        return Craft::t('free-nav', 'FreeNav Menu');
+        return t('FreeNav Menu', category: 'free-nav');
     }
 
+    #[Override]
     public static function icon(): string
     {
         return 'list';
     }
 
-    public function getInputHtml(mixed $value, ?ElementInterface $element = null): string
+    #[Override]
+    public static function phpType(): string
     {
-        $menus = FreeNav::getInstance()->getMenus()->getAllMenus();
+        return 'string|null';
+    }
 
-        $options = [
-            ['label' => Craft::t('free-nav', 'Select a menu…'), 'value' => ''],
-        ];
+    #[Override]
+    public static function dbType(): string
+    {
+        return Query::TYPE_STRING;
+    }
 
-        foreach ($menus as $menu) {
-            $options[] = [
-                'label' => $menu->name,
-                'value' => $menu->handle,
-            ];
+    #[Override]
+    public function uiControl(FieldContext $context): Control
+    {
+        $options = [];
+
+        foreach (app(Menus::class)->getAllMenus() as $menu) {
+            $options[] = ['label' => (string) $menu->name, 'value' => (string) $menu->handle];
         }
 
-        return Craft::$app->getView()->renderTemplate('free-nav/_components/fieldtypes/Menu/input', [
-            'name' => $this->handle,
-            'value' => $value,
-            'options' => $options,
-        ]);
+        return Choice::make($context->path)
+            ->options($options)
+            ->placeholder(t('Select a menu…', category: 'free-nav'))
+            ->value($this->serializeValue($context->value, $context->element));
     }
 
-    public function getSettingsHtml(): ?string
-    {
-        return Craft::$app->getView()->renderTemplate('free-nav/_components/fieldtypes/Menu/settings', [
-            'field' => $this,
-        ]);
-    }
-
+    #[Override]
     public function normalizeValue(mixed $value, ?ElementInterface $element = null): mixed
     {
-        return $value ?: null;
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
+    #[Override]
     public function serializeValue(mixed $value, ?ElementInterface $element = null): mixed
     {
-        return $value ?: null;
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
+    #[Override]
     public function getPreviewHtml(mixed $value, ElementInterface $element): string
     {
-        if (!$value) {
+        if (! is_string($value) || $value === '') {
             return '';
         }
 
-        $menu = FreeNav::getInstance()->getMenus()->getMenuByHandle($value);
+        $menu = app(Menus::class)->getMenuByHandle($value);
 
-        return $menu ? $menu->name : $value;
+        return Html::encode($menu ? (string) $menu->name : $value);
     }
 
-    public function getContentColumnType(): string
+    #[Override]
+    public function previewPlaceholderHtml(mixed $value, ?ElementInterface $element): string
     {
-        return 'string';
+        return Html::encode(is_string($value) && $value !== '' ? $value : t('Main menu', category: 'free-nav'));
     }
 }

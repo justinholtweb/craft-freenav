@@ -1,25 +1,32 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Services;
 
-use Craft;
-use craft\helpers\Template;
+use CraftCms\Cms\Support\Facades\Sites;
+use CraftCms\Cms\User\Data\UserGroup;
+use CraftCms\Cms\View\TemplateMode;
+use Illuminate\Support\HtmlString;
 use JustinHoltWeb\FreeNav\Elements\Node;
 use JustinHoltWeb\FreeNav\Enums\Preset;
 use JustinHoltWeb\FreeNav\FreeNav;
 use JustinHoltWeb\FreeNav\Helpers\NodeHelper;
-use Twig\Markup;
-use yii\base\Component;
 
-class Renderer extends Component
+use function CraftCms\Cms\currentUserElement;
+use function CraftCms\Cms\template;
+
+class Renderer
 {
-    public function render(string $handle, array $options = []): Markup
+    /**
+     * @param  array<string, mixed>  $options
+     */
+    public function render(string $handle, array $options = []): HtmlString
     {
         $settings = FreeNav::getInstance()->getSettings();
 
-        // Merge defaults
         $options = array_merge([
-            'preset' => $settings->defaultPreset,
+            'preset' => $settings->defaultPreset ?: Preset::Default->value,
             'id' => null,
             'class' => null,
             'ulClass' => null,
@@ -37,43 +44,30 @@ class Renderer extends Component
 
         // A query string would make every cache key unique — `?x=1`, `?x=2`… is an easy way to
         // fill the cache — and those pages are rarely the ones worth caching, so render them fresh.
-        $request = Craft::$app->getRequest();
-
-        if (!$request->getIsConsoleRequest() && $request->getQueryStringWithoutPath() !== '') {
+        if (! app()->runningInConsole() && request()->query() !== []) {
             $options['cache'] = false;
         }
 
-        // Check cache
-        if ($options['cache']) {
-            $siteId = (string)Craft::$app->getSites()->getCurrentSite()->id;
-            $cacheKey = $this->_cacheKey($options);
-            $cached = FreeNav::getInstance()->getMenuCache()->get($handle, $siteId, $cacheKey);
+        $cache = app(MenuCache::class);
+        $siteId = (string) Sites::getCurrentSite()->id;
+        $cacheKey = $options['cache'] ? $this->cacheKey($options) : null;
+
+        if ($cacheKey !== null) {
+            $cached = $cache->get($handle, $siteId, $cacheKey);
 
             if ($cached !== null) {
-                return Template::raw($cached);
+                return new HtmlString($cached);
             }
         }
 
-        // Get preset
-        $preset = Preset::tryFrom($options['preset'] ?? 'default') ?? Preset::Default;
+        $preset = Preset::tryFrom((string) ($options['preset'] ?? Preset::Default->value)) ?? Preset::Default;
+        $html = $this->renderMenu($handle, $preset, $options);
 
-        // Build the HTML
-        $html = $this->_renderMenu($handle, $preset, $options);
-
-        // Store in cache
-        if ($options['cache']) {
-            $siteId = (string)Craft::$app->getSites()->getCurrentSite()->id;
-            $cacheKey = $this->_cacheKey($options);
-            FreeNav::getInstance()->getMenuCache()->set(
-                $handle,
-                $siteId,
-                $cacheKey,
-                $html,
-                $options['cacheDuration'],
-            );
+        if ($cacheKey !== null) {
+            $cache->set($handle, $siteId, $cacheKey, $html, (int) $options['cacheDuration']);
         }
 
-        return Template::raw($html);
+        return new HtmlString($html);
     }
 
     /**
@@ -83,58 +77,52 @@ class Renderer extends Component
      * Until 5.1.5 the key was the options alone, so the first visitor's render was served to
      * everyone — a menu rendered for a logged-in admin, members-only links included, went to
      * anonymous visitors, and the active item was whatever page warmed the cache.
+     *
+     * @param  array<string, mixed>  $options
      */
-    private function _cacheKey(array $options): string
+    private function cacheKey(array $options): string
     {
-        $request = Craft::$app->getRequest();
-        $user = Craft::$app->getUser()->getIdentity();
+        $user = app()->runningInConsole() ? null : currentUserElement();
+        $groups = $user ? array_map(fn (UserGroup $group) => $group->id, $user->getGroups()) : [];
+        sort($groups);
 
         $context = [
             'options' => $options,
-            'url' => $request->getIsConsoleRequest() ? '' : $request->getHostInfo() . '/' . $request->getFullPath(),
-            'user' => $user ? ['in' => true, 'groups' => array_map(fn($group) => $group->id, $user->getGroups())] : ['in' => false],
+            'url' => app()->runningInConsole() ? '' : request()->url(),
+            'user' => $user ? ['in' => true, 'groups' => $groups] : ['in' => false],
         ];
 
-        if ($user) {
-            sort($context['user']['groups']);
-        }
-
-        return md5(json_encode($context));
+        return md5((string) json_encode($context));
     }
 
-    public function renderPreset(string $handle, Preset $preset, array $options = []): Markup
+    /**
+     * @param  array<string, mixed>  $options
+     */
+    public function renderPreset(string $handle, Preset $preset, array $options = []): HtmlString
     {
         $options['preset'] = $preset->value;
+
         return $this->render($handle, $options);
     }
 
+    /**
+     * @param  array<string, mixed>  $criteria
+     * @return list<array{node: Node, children: array<mixed>}>
+     */
     public function tree(string $handle, array $criteria = []): array
     {
-        $query = Node::find()
-            ->menuHandle($handle)
-            ->status('enabled');
+        $query = Node::find()->menuHandle($handle)->status('enabled');
 
         foreach ($criteria as $key => $value) {
-            if (method_exists($query, $key)) {
-                $query->$key($value);
-            } else {
-                $query->$key = $value;
-            }
+            $query->$key = $value;
         }
 
-        $nodes = $query->all();
-
-        return NodeHelper::buildTree($nodes);
+        return NodeHelper::buildTree($query->all());
     }
 
     public function getActiveNode(string $handle): ?Node
     {
-        $nodes = Node::find()
-            ->menuHandle($handle)
-            ->status('enabled')
-            ->all();
-
-        foreach ($nodes as $node) {
+        foreach (Node::find()->menuHandle($handle)->status('enabled')->all() as $node) {
             if ($node->isCurrent()) {
                 return $node;
             }
@@ -143,60 +131,38 @@ class Renderer extends Component
         return null;
     }
 
-    private function _renderMenu(string $handle, Preset $preset, array $options): string
+    /**
+     * @param  array<string, mixed>  $options
+     */
+    private function renderMenu(string $handle, Preset $preset, array $options): string
     {
-        // Custom template override
-        if (!empty($options['overrideTemplate'])) {
-            $templatePath = $options['overrideTemplate'];
-        } else {
-            $templatePath = 'free-nav/_presets/' . $preset->templateName();
-        }
-
-        // Get nodes
-        $query = Node::find()
-            ->menuHandle($handle)
-            ->status('enabled');
+        $query = Node::find()->menuHandle($handle)->status('enabled');
 
         if ($options['maxLevel'] ?? null) {
-            $query->level('<= ' . $options['maxLevel']);
+            $query->level('<= '.(int) $options['maxLevel']);
         }
 
         $nodes = $query->all();
 
-        // Filter by visibility
         if ($options['visibilityCheck']) {
-            $nodes = array_filter($nodes, fn(Node $node) => $node->isVisible());
+            $nodes = array_filter($nodes, fn (Node $node) => $node->isVisible());
 
-            // Presets nest by level, so drop the descendants of any node that was
-            // filtered out instead of letting them surface as their own top-level items
+            // Presets nest by level, so drop the descendants of any node that was filtered out
+            // instead of letting them surface as their own top-level items
             $nodes = NodeHelper::flattenTree(NodeHelper::buildTree(array_values($nodes)));
         }
 
-        if (empty($nodes)) {
+        if ($nodes === []) {
             return '';
         }
 
-        $menu = FreeNav::getInstance()->getMenus()->getMenuByHandle($handle);
+        $menu = app(Menus::class)->getMenuByHandle($handle);
+        $template = ! empty($options['overrideTemplate']) ? (string) $options['overrideTemplate'] : $preset->templatePath();
 
-        // Render template
-        $view = Craft::$app->getView();
-        $oldTemplateMode = $view->getTemplateMode();
-
-        // If using built-in preset, use CP template mode to find it in plugin templates
-        if (empty($options['overrideTemplate'])) {
-            $view->setTemplateMode($view::TEMPLATE_MODE_CP);
-        }
-
-        try {
-            $html = $view->renderTemplate($templatePath, [
-                'nodes' => $nodes,
-                'menu' => $menu,
-                'options' => $options,
-            ]);
-        } finally {
-            $view->setTemplateMode($oldTemplateMode);
-        }
-
-        return $html;
+        return template($template, [
+            'nodes' => $nodes,
+            'menu' => $menu,
+            'options' => $options,
+        ], TemplateMode::Site);
     }
 }

@@ -1,23 +1,28 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Helpers;
 
-use JustinHoltWeb\FreeNav\FreeNav;
+use JustinHoltWeb\FreeNav\Services\MenuCache;
 
 class CacheHelper
 {
     public static function invalidateMenuCache(string $handle): void
     {
-        FreeNav::getInstance()->getMenuCache()->invalidate($handle);
+        app(MenuCache::class)->invalidate($handle);
     }
 
     public static function invalidateAllCaches(): void
     {
-        FreeNav::getInstance()->getMenuCache()->invalidateAll();
+        app(MenuCache::class)->invalidateAll();
     }
 
+    /**
+     * @param  array<mixed>  $options
+     */
     public static function getCacheKey(array $options): string
     {
-        return md5(json_encode($options));
+        return md5((string) json_encode($options));
     }
 }

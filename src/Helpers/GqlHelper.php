@@ -1,20 +1,25 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Helpers;
 
-use craft\helpers\Gql as CraftGqlHelper;
+use CraftCms\Cms\Gql\GqlHelper as CraftGqlHelper;
 
 class GqlHelper
 {
+    public const string COMPONENT = 'freeNavMenus';
+
     public static function canQueryFreeNavNodes(): bool
     {
-        $allowedEntities = CraftGqlHelper::extractAllowedEntitiesFromSchema('read');
-        return isset($allowedEntities['freeNavMenus']);
+        return isset(CraftGqlHelper::extractAllowedEntitiesFromSchema('read')[self::COMPONENT]);
     }
 
+    /**
+     * @return string[]
+     */
     public static function getAllowedMenuUids(): array
     {
-        $allowedEntities = CraftGqlHelper::extractAllowedEntitiesFromSchema('read');
-        return $allowedEntities['freeNavMenus'] ?? [];
+        return CraftGqlHelper::extractAllowedEntitiesFromSchema('read')[self::COMPONENT] ?? [];
     }
 }

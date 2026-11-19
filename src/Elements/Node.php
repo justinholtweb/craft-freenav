@@ -1,148 +1,221 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Elements;
 
-use Craft;
-use craft\base\Element;
-use craft\base\ElementInterface;
-use craft\elements\actions\Delete;
-use craft\elements\actions\SetStatus;
-use craft\helpers\App;
-use craft\helpers\Html;
-use craft\helpers\Json;
-use craft\helpers\Template;
-use craft\helpers\UrlHelper;
+use CraftCms\Cms\Cp\Data\ActionItem;
+use CraftCms\Cms\Element\Actions\Delete;
+use CraftCms\Cms\Element\Actions\SetStatus;
+use CraftCms\Cms\Element\Conditions\Contracts\ElementConditionInterface;
+use CraftCms\Cms\Element\Contracts\ElementInterface;
+use CraftCms\Cms\Element\Element;
+use CraftCms\Cms\Element\ElementHelper;
+use CraftCms\Cms\Element\Queries\Contracts\ElementQueryInterface;
+use CraftCms\Cms\FieldLayout\FieldLayout;
+use CraftCms\Cms\Support\Env;
+use CraftCms\Cms\Support\Facades\Elements;
+use CraftCms\Cms\Support\Facades\Sites;
+use CraftCms\Cms\Support\Html;
+use CraftCms\Cms\Support\Json;
+use CraftCms\Cms\Support\Url;
+use CraftCms\Cms\User\Elements\User;
+use CraftCms\RulesetValidation\Attributes\Ruleset;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\HtmlString;
+use JustinHoltWeb\FreeNav\Elements\Conditions\NodeCondition;
 use JustinHoltWeb\FreeNav\Elements\Queries\NodeQuery;
+use JustinHoltWeb\FreeNav\Elements\Validation\NodeRules;
 use JustinHoltWeb\FreeNav\Enums\NodeType as NodeTypeEnum;
 use JustinHoltWeb\FreeNav\Enums\Propagation;
-use JustinHoltWeb\FreeNav\Events\NodeActiveEvent;
-use JustinHoltWeb\FreeNav\FreeNav;
-use JustinHoltWeb\FreeNav\Gql\Interfaces\NodeInterface;
+use JustinHoltWeb\FreeNav\Events\ResolvingNodeActive;
 use JustinHoltWeb\FreeNav\Models\Menu;
 use JustinHoltWeb\FreeNav\Models\VisibilityRule;
-use JustinHoltWeb\FreeNav\Records\NodeRecord;
-use Twig\Markup;
-use yii\base\InvalidConfigException;
+use JustinHoltWeb\FreeNav\Services\Menus;
+use JustinHoltWeb\FreeNav\Services\Nodes;
+use Override;
+use RuntimeException;
+use Stringable;
 
+use function CraftCms\Cms\cp_url;
+use function CraftCms\Cms\currentUserElement;
+use function CraftCms\Cms\t;
+
+/**
+ * A menu node.
+ *
+ * Nodes are elements: they live in `elements`, with their own columns in `freenav_nodes` (same ID),
+ * and in their menu's structure, which is the only place the hierarchy is kept.
+ *
+ * @property NodeRules $ruleset
+ */
+#[Ruleset(NodeRules::class)] // @phpstan-ignore argument.type (Ruleset's template isn't covariant; core's own elements do this)
 class Node extends Element
 {
-    public const EVENT_NODE_ACTIVE = 'nodeActive';
+    /**
+     * The node attributes the control panel's node editor may set. Everything else on a node — its
+     * menu, type and linked element — is decided when it's created, so a crafted save request can't
+     * move a node into a menu its author can't edit.
+     */
+    public const array EDITABLE_ATTRIBUTES = [
+        'title', 'customUrl', 'classes', 'urlSuffix', 'customAttributes', 'newWindow', 'icon', 'badge',
+        'visibilityRules',
+    ];
 
     public ?int $menuId = null;
+
     public ?int $linkedElementId = null;
+
     public string $nodeType = 'custom';
+
     public ?string $customUrl = null;
+
     public ?string $classes = null;
+
     public ?string $urlSuffix = null;
+
+    /** @var array<mixed>|string|null */
     public array|string|null $customAttributes = null;
+
+    /** @var array<mixed>|string|null */
     public array|string|null $data = null;
+
     public bool $newWindow = false;
+
     public ?string $icon = null;
+
     public ?string $badge = null;
+
+    /** @var array<mixed>|string|null */
     public array|string|null $visibilityRules = null;
+
     public ?bool $deletedWithMenu = null;
-    public mixed $content = null;
 
-    public function __construct($config = [])
-    {
-        // Filter out properties not defined on this class to avoid UnknownPropertyException
-        if (is_array($config)) {
-            $config = array_filter($config, function($key) {
-                return property_exists($this, $key) || method_exists($this, 'set' . ucfirst($key));
-            }, ARRAY_FILTER_USE_KEY);
-        }
+    private ?ElementInterface $linkedElement = null;
 
-        parent::__construct($config);
-    }
+    private bool $linkedElementLoaded = false;
 
-    private ?ElementInterface $_linkedElement = null;
-    private ?bool $_linkedElementLoaded = false;
-    private ?Menu $_menu = null;
+    private ?Menu $menu = null;
 
+    #[Override]
     public static function displayName(): string
     {
-        return Craft::t('free-nav', 'Navigation Node');
+        return t('Navigation Node', category: 'free-nav');
     }
 
+    #[Override]
     public static function pluralDisplayName(): string
     {
-        return Craft::t('free-nav', 'Navigation Nodes');
+        return t('Navigation Nodes', category: 'free-nav');
     }
 
+    #[Override]
     public static function lowerDisplayName(): string
     {
-        return Craft::t('free-nav', 'navigation node');
+        return t('navigation node', category: 'free-nav');
     }
 
+    #[Override]
     public static function pluralLowerDisplayName(): string
     {
-        return Craft::t('free-nav', 'navigation nodes');
+        return t('navigation nodes', category: 'free-nav');
     }
 
+    #[Override]
     public static function refHandle(): ?string
     {
         return 'freenavnode';
     }
 
+    #[Override]
     public static function hasTitles(): bool
     {
         return true;
     }
 
+    #[Override]
     public static function hasStatuses(): bool
     {
         return true;
     }
 
+    #[Override]
     public static function isLocalized(): bool
     {
         return true;
     }
 
+    #[Override]
     public static function trackChanges(): bool
     {
         return true;
     }
 
+    #[Override]
+    public static function hasStructures(): bool
+    {
+        return true;
+    }
+
+    #[Override]
+    public static function find(): NodeQuery
+    {
+        return new NodeQuery;
+    }
+
+    #[Override]
+    public static function createCondition(): ElementConditionInterface
+    {
+        return new NodeCondition(self::class);
+    }
+
+    #[Override]
     public function getGqlTypeName(): string
     {
-        return $this->getMenu()->handle . '_FreeNavNode';
+        return self::gqlTypeName($this->getMenu());
     }
 
-    public static function gqlTypeNameByContext(mixed $context): string
+    public static function gqlTypeName(Menu $menu): string
     {
-        /** @var Menu $context */
-        return $context->handle . '_FreeNavNode';
+        return $menu->handle.'_FreeNavNode';
     }
 
+    #[Override]
     public static function gqlScopesByContext(mixed $context): array
     {
         /** @var Menu $context */
         return ["freeNavMenus.{$context->uid}:read"];
     }
 
-    public static function gqlInterfaceType(): string
+    /**
+     * One source per menu, each in structure mode. Only the menus the user can work on are listed,
+     * and the tree is only draggable for those whose nodes they may edit — the core index uses
+     * `structureEditable` as the only gate on moving.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    #[Override]
+    protected static function defineSources(string $context): array
     {
-        return NodeInterface::class;
-    }
-
-    public static function find(): NodeQuery
-    {
-        return new NodeQuery(static::class);
-    }
-
-    public static function defineSources(?string $context = null): array
-    {
+        $menus = app(Menus::class);
+        $user = currentUserElement();
         $sources = [];
-        $menus = FreeNav::getInstance()->getMenus()->getAllMenus();
 
-        foreach ($menus as $menu) {
+        foreach ($menus->getAllMenus() as $menu) {
+            $canEdit = $user ? $menus->canEditNodes($user, $menu) : true;
+
+            if ($user && ! $canEdit && ! $menus->canManageMenu($user, $menu)) {
+                continue;
+            }
+
             $sources[] = [
-                'key' => 'menu:' . $menu->uid,
+                'key' => 'menu:'.$menu->uid,
                 'label' => $menu->name,
+                'data' => ['handle' => $menu->handle, 'menu-id' => $menu->id],
                 'criteria' => ['menuId' => $menu->id],
                 'structureId' => $menu->structureId,
-                'structureEditable' => true,
+                'structureEditable' => $canEdit,
                 'defaultSort' => ['structure', 'asc'],
             ];
         }
@@ -150,48 +223,71 @@ class Node extends Element
         return $sources;
     }
 
+    #[Override]
     protected static function defineTableAttributes(): array
     {
-        return [
-            'title' => Craft::t('app', 'Title'),
-            'nodeType' => Craft::t('free-nav', 'Node Type'),
-            'url' => Craft::t('app', 'URL'),
-            'classes' => Craft::t('free-nav', 'Classes'),
-            'newWindow' => Craft::t('free-nav', 'New Window'),
-        ];
+        return array_merge(parent::defineTableAttributes(), [
+            'nodeType' => ['label' => t('Node Type', category: 'free-nav')],
+            'url' => ['label' => t('URL', category: 'free-nav')],
+            'classes' => ['label' => t('Classes', category: 'free-nav')],
+            'newWindow' => ['label' => t('New Window', category: 'free-nav')],
+        ]);
     }
 
+    #[Override]
     protected static function defineDefaultTableAttributes(string $source): array
     {
-        return ['title', 'nodeType', 'url'];
+        return ['status', 'nodeType', 'url'];
     }
 
-    protected static function defineActions(?string $source = null): array
+    #[Override]
+    protected static function defineActions(string $source): array
     {
         return [
-            Delete::class,
             SetStatus::class,
+            Delete::class,
         ];
     }
 
+    #[Override]
     protected static function defineSearchableAttributes(): array
     {
         return ['title', 'customUrl', 'classes', 'nodeType'];
     }
 
+    #[Override]
+    protected function attributeHtml(string $attribute): string|Stringable
+    {
+        return match ($attribute) {
+            'nodeType' => Html::tag('span', Html::encode($this->getNodeType()->label()), [
+                'style' => 'color: '.$this->getNodeType()->color(),
+            ]),
+            'url' => ($url = $this->getUrl()) !== null ? Html::tag('code', Html::encode($url)) : '',
+            'newWindow' => $this->newWindow ? Html::encode(t('Yes', category: 'free-nav')) : '',
+            default => parent::attributeHtml($attribute),
+        };
+    }
+
+    // URLs and links
+    // -------------------------------------------------------------------------
+
+    /**
+     * The URL a visitor should follow. `customUrl` is only the stored value for custom nodes; this
+     * resolves linked elements and the suffix, and is the only accessor for the URL to print.
+     */
+    #[Override]
     public function getUrl(): ?string
     {
-        $nodeTypeEnum = $this->getNodeType();
+        $nodeType = $this->getNodeType();
 
-        if (!$nodeTypeEnum->hasUrl()) {
+        if (! $nodeType->hasUrl()) {
             return null;
         }
 
-        if ($nodeTypeEnum->isElement()) {
-            $element = $this->getLinkedElement();
-            $baseUrl = $element?->getUrl();
+        if ($nodeType->isElement()) {
+            $baseUrl = $this->getLinkedElement()?->getUrl();
         } else {
-            $baseUrl = $this->_parseUrl($this->customUrl);
+            $baseUrl = self::resolveCustomUrl($this->customUrl);
         }
 
         if ($baseUrl === null) {
@@ -205,18 +301,19 @@ class Node extends Element
         return $baseUrl;
     }
 
-    public function getLink(): Markup
+    #[Override]
+    public function getLink(): ?HtmlString
     {
         $url = $this->getUrl();
         $attrs = $this->getLinkAttributes();
 
         if ($url === null) {
-            return Template::raw(Html::tag('span', Html::encode($this->title), $attrs));
+            return new HtmlString(Html::tag('span', Html::encode((string) $this->title), $attrs));
         }
 
         $attrs['href'] = $url;
 
-        return Template::raw(Html::tag('a', Html::encode($this->title), $attrs));
+        return new HtmlString(Html::tag('a', Html::encode((string) $this->title), $attrs));
     }
 
     public function getTarget(): string
@@ -226,46 +323,32 @@ class Node extends Element
 
     public function getLinkedElement(): ?ElementInterface
     {
-        if ($this->_linkedElementLoaded) {
-            return $this->_linkedElement;
+        if ($this->linkedElementLoaded) {
+            return $this->linkedElement;
         }
 
-        $this->_linkedElementLoaded = true;
+        $this->linkedElementLoaded = true;
+        $elementType = $this->getNodeType()->elementType();
 
-        if (!$this->linkedElementId) {
+        if (! $this->linkedElementId || ! $elementType) {
             return null;
         }
 
-        $nodeTypeEnum = $this->getNodeType();
-        $elementType = $nodeTypeEnum->elementType();
-
-        if (!$elementType) {
-            return null;
-        }
-
-        $this->_linkedElement = Craft::$app->getElements()->getElementById(
-            $this->linkedElementId,
-            $elementType,
-            $this->siteId,
-        );
-
-        return $this->_linkedElement;
+        return $this->linkedElement = Elements::getElementById($this->linkedElementId, $elementType, $this->siteId);
     }
 
     public function isActive(): bool
     {
-        $request = Craft::$app->getRequest();
-
-        if ($request->getIsConsoleRequest()) {
+        if (app()->runningInConsole()) {
             return false;
         }
 
-        // Allow event override
-        $event = new NodeActiveEvent(['node' => $this]);
-        $this->trigger(self::EVENT_NODE_ACTIVE, $event);
+        if (Event::hasListeners(ResolvingNodeActive::class)) {
+            event($event = new ResolvingNodeActive($this));
 
-        if ($event->isActive !== null) {
-            return $event->isActive;
+            if ($event->isActive !== null) {
+                return $event->isActive;
+            }
         }
 
         return $this->isCurrent() || $this->hasActiveDescendant();
@@ -273,30 +356,29 @@ class Node extends Element
 
     public function isCurrent(): bool
     {
-        $request = Craft::$app->getRequest();
-
-        if ($request->getIsConsoleRequest()) {
+        if (app()->runningInConsole()) {
             return false;
         }
 
         $nodeUrl = $this->getUrl();
+
         if ($nodeUrl === null) {
             return false;
         }
 
-        $currentUrl = $request->getAbsoluteUrl();
-        $nodeUrl = UrlHelper::siteUrl($nodeUrl);
+        $currentUrl = request()->fullUrl();
+        $nodeUrl = Url::siteUrl($nodeUrl);
 
         return rtrim($currentUrl, '/') === rtrim($nodeUrl, '/');
     }
 
     public function hasActiveDescendant(): bool
     {
-        /** @var Node[] $children */
-        $children = $this->getChildren()->all();
+        $children = $this->getChildren();
 
-        foreach ($children as $child) {
-            if ($child->isCurrent() || $child->hasActiveDescendant()) {
+        // Iterating an element query directly doesn't run it in Craft 6, so ask for the results.
+        foreach ($children instanceof ElementQueryInterface ? $children->all() : $children as $child) {
+            if ($child instanceof self && ($child->isCurrent() || $child->hasActiveDescendant())) {
                 return true;
             }
         }
@@ -306,26 +388,21 @@ class Node extends Element
 
     public function getMenu(): Menu
     {
-        if ($this->_menu !== null) {
-            return $this->_menu;
+        if ($this->menu !== null) {
+            return $this->menu;
         }
 
-        if (!$this->menuId) {
-            throw new InvalidConfigException('Node is missing its menu ID');
+        if (! $this->menuId) {
+            throw new RuntimeException('Node is missing its menu ID');
         }
 
-        $this->_menu = FreeNav::getInstance()->getMenus()->getMenuById($this->menuId);
-
-        if ($this->_menu === null) {
-            throw new InvalidConfigException('Invalid menu ID: ' . $this->menuId);
-        }
-
-        return $this->_menu;
+        return $this->menu = app(Menus::class)->getMenuById($this->menuId)
+            ?? throw new RuntimeException('Invalid menu ID: '.$this->menuId);
     }
 
     public function getNodeType(): NodeTypeEnum
     {
-        return NodeTypeEnum::from($this->nodeType);
+        return NodeTypeEnum::tryFrom($this->nodeType) ?? NodeTypeEnum::Custom;
     }
 
     public function isElement(): bool
@@ -350,18 +427,23 @@ class Node extends Element
 
     public function hasOverriddenTitle(): bool
     {
-        if (!$this->isElement()) {
+        if (! $this->isElement()) {
             return false;
         }
 
         $element = $this->getLinkedElement();
-        if (!$element) {
+
+        if (! $element) {
             return false;
         }
 
         return $this->title !== $element->title;
     }
 
+    /**
+     * @param  array<string, mixed>  $extra
+     * @return array<string, mixed>
+     */
     public function getLinkAttributes(array $extra = []): array
     {
         $attrs = [];
@@ -375,21 +457,28 @@ class Node extends Element
             $attrs['rel'] = 'noopener noreferrer';
         }
 
-        // Custom attributes
-        $customAttrs = $this->getCustomAttributesArray();
-        foreach ($customAttrs as $attr) {
-            if (!empty($attr['key'])) {
-                $attrs[$attr['key']] = $attr['value'] ?? '';
+        // Custom attributes. Unsafe names are skipped here as well as refused on save, so a menu
+        // saved before 5.2.1 (or written straight to the database) can't put script on the page.
+        foreach ($this->getCustomAttributesArray() as $attr) {
+            if (! is_array($attr) || empty($attr['key']) || ! self::isSafeAttributeName((string) $attr['key'])) {
+                continue;
+            }
+
+            $value = self::customAttributeValue($attr['value'] ?? null);
+
+            if ($value !== null) {
+                $attrs[$attr['key']] = $value;
             }
         }
 
-        // ARIA attributes
-        $ariaAttrs = $this->getAriaAttributes();
-        $attrs = array_merge($attrs, $ariaAttrs);
+        $attrs = array_merge($attrs, $this->getAriaAttributes());
 
         return array_merge($attrs, $extra);
     }
 
+    /**
+     * @return array<string, string>
+     */
     public function getAriaAttributes(): array
     {
         $attrs = [];
@@ -398,8 +487,7 @@ class Node extends Element
             $attrs['aria-current'] = 'page';
         }
 
-        $children = $this->getChildren();
-        if ($children->count()) {
+        if ($this->getChildren()->count()) {
             $attrs['aria-expanded'] = 'false';
             $attrs['aria-haspopup'] = 'true';
         }
@@ -409,15 +497,8 @@ class Node extends Element
 
     public function isVisible(): bool
     {
-        $rules = $this->getVisibilityRulesArray();
-
-        if (empty($rules)) {
-            return true;
-        }
-
-        foreach ($rules as $ruleData) {
-            $rule = new VisibilityRule($ruleData);
-            if (!$rule->evaluate()) {
+        foreach ($this->getVisibilityRulesArray() as $ruleData) {
+            if (is_array($ruleData) && ! VisibilityRule::fromArray($ruleData)->evaluate()) {
                 return false;
             }
         }
@@ -425,68 +506,80 @@ class Node extends Element
         return true;
     }
 
-    public function getIconHtml(): ?Markup
+    public function getIconHtml(): ?HtmlString
     {
         if (empty($this->icon)) {
             return null;
         }
 
-        return Template::raw(Html::tag('i', '', ['class' => $this->icon, 'aria-hidden' => 'true']));
+        return new HtmlString(Html::tag('i', '', ['class' => $this->icon, 'aria-hidden' => 'true']));
     }
 
-    public function getBadgeHtml(): ?Markup
+    public function getBadgeHtml(): ?HtmlString
     {
         if (empty($this->badge)) {
             return null;
         }
 
-        return Template::raw(Html::tag('span', Html::encode($this->badge), ['class' => 'freenav-badge']));
+        return new HtmlString(Html::tag('span', Html::encode($this->badge), ['class' => 'freenav-badge']));
     }
 
+    /**
+     * @return array<mixed>
+     */
     public function getCustomAttributesArray(): array
     {
-        if (is_string($this->customAttributes)) {
-            return Json::decodeIfJson($this->customAttributes) ?: [];
-        }
-
-        return $this->customAttributes ?? [];
+        return self::decodeJsonColumn($this->customAttributes);
     }
 
+    /**
+     * @return array<mixed>
+     */
     public function getVisibilityRulesArray(): array
     {
-        if (is_string($this->visibilityRules)) {
-            return Json::decodeIfJson($this->visibilityRules) ?: [];
-        }
-
-        return $this->visibilityRules ?? [];
+        return self::decodeJsonColumn($this->visibilityRules);
     }
 
+    /**
+     * @return array<mixed>
+     */
     public function getDataArray(): array
     {
-        if (is_string($this->data)) {
-            return Json::decodeIfJson($this->data) ?: [];
-        }
-
-        return $this->data ?? [];
+        return self::decodeJsonColumn($this->data);
     }
 
+    /**
+     * @param  array<mixed>|string|null  $value
+     * @return array<mixed>
+     */
+    private static function decodeJsonColumn(array|string|null $value): array
+    {
+        if (is_string($value)) {
+            $decoded = Json::decodeIfJson($value);
+
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        return $value ?? [];
+    }
+
+    #[Override]
     public function fields(): array
     {
         $fields = parent::fields();
 
         // Decode JSON columns as arrays instead of raw strings
-        $fields['customAttributes'] = fn() => $this->getCustomAttributesArray();
-        $fields['data'] = fn() => $this->getDataArray();
-        $fields['visibilityRules'] = fn() => $this->getVisibilityRulesArray();
+        $fields['customAttributes'] = fn () => $this->getCustomAttributesArray();
+        $fields['data'] = fn () => $this->getDataArray();
+        $fields['visibilityRules'] = fn () => $this->getVisibilityRulesArray();
 
         return $fields;
     }
 
+    #[Override]
     public function extraFields(): array
     {
-        $fields = parent::extraFields();
-
-        return array_merge($fields, [
+        return array_merge(parent::extraFields(), [
             'active',
             'target',
             'menuHandle',
@@ -502,12 +595,12 @@ class Node extends Element
 
     public function getMenuHandle(): string
     {
-        return $this->getMenu()->handle;
+        return (string) $this->getMenu()->handle;
     }
 
     public function getMenuName(): string
     {
-        return $this->getMenu()->name;
+        return (string) $this->getMenu()->name;
     }
 
     public function getNodeTypeName(): string
@@ -515,20 +608,22 @@ class Node extends Element
         return $this->getNodeType()->label();
     }
 
+    // Sites, layout, saving
+    // -------------------------------------------------------------------------
+
+    #[Override]
     public function getSupportedSites(): array
     {
         $menu = $this->getMenu();
-        $sitesService = Craft::$app->getSites();
         $enabledSiteIds = $menu->getEnabledSiteIds();
-        $siteId = $this->siteId ?? $sitesService->getCurrentSite()->id;
-        $site = $sitesService->getSiteById($siteId);
-
+        $siteId = $this->siteId ?? Sites::getCurrentSite()->id;
+        $site = Sites::getSiteById((int) $siteId);
         $sites = [];
 
         foreach ($enabledSiteIds as $enabledSiteId) {
-            $enabledSite = $sitesService->getSiteById($enabledSiteId);
+            $enabledSite = Sites::getSiteById($enabledSiteId);
 
-            if (!$enabledSite) {
+            if (! $enabledSite) {
                 continue;
             }
 
@@ -540,185 +635,235 @@ class Node extends Element
             };
 
             if ($include) {
-                $sites[] = [
-                    'siteId' => $enabledSiteId,
-                    'propagate' => true,
-                    'enabledByDefault' => true,
-                ];
+                $sites[] = ['siteId' => $enabledSiteId, 'propagate' => true, 'enabledByDefault' => true];
             }
         }
 
-        // Nothing matched, which means the node's own site isn't one the menu is enabled
-        // for. Report the menu's sites so Craft raises its "unsupported site" error
-        // against the real list rather than silently saving somewhere unexpected.
-        if (empty($sites)) {
+        // Nothing matched, which means the node's own site isn't one the menu is enabled for. Report
+        // the menu's sites so Craft raises its "unsupported site" error against the real list rather
+        // than silently saving somewhere unexpected.
+        if ($sites === []) {
             foreach ($enabledSiteIds as $enabledSiteId) {
-                $sites[] = [
-                    'siteId' => $enabledSiteId,
-                    'propagate' => true,
-                    'enabledByDefault' => true,
-                ];
+                $sites[] = ['siteId' => $enabledSiteId, 'propagate' => true, 'enabledByDefault' => true];
             }
         }
 
         return $sites;
     }
 
-    public function getFieldLayout(): ?\craft\models\FieldLayout
+    #[Override]
+    public function getFieldLayout(): ?FieldLayout
     {
         try {
             return $this->getMenu()->getFieldLayout();
-        } catch (InvalidConfigException) {
+        } catch (RuntimeException) {
             return null;
         }
     }
 
+    /**
+     * Writes the node's own row. Runs inside the save transaction, once per site.
+     */
+    #[Override]
     public function afterSave(bool $isNew): void
     {
-        if (!$isNew) {
-            $record = NodeRecord::findOne($this->id);
+        $now = now();
+        $row = [
+            'id' => $this->id,
+            'menuId' => $this->menuId,
+            'linkedElementId' => $this->linkedElementId,
+            'nodeType' => $this->nodeType,
+            'customUrl' => $this->customUrl,
+            'classes' => $this->classes,
+            'urlSuffix' => $this->urlSuffix,
+            'customAttributes' => self::encodeJsonColumn($this->customAttributes),
+            'data' => self::encodeJsonColumn($this->data),
+            'newWindow' => $this->newWindow,
+            'icon' => $this->icon,
+            'badge' => $this->badge,
+            'visibilityRules' => self::encodeJsonColumn($this->visibilityRules),
+            'deletedWithMenu' => $this->deletedWithMenu,
+            'dateUpdated' => $now,
+        ];
 
-            if (!$record) {
-                throw new InvalidConfigException('Invalid node ID: ' . $this->id);
-            }
-        } else {
-            $record = new NodeRecord();
-            $record->id = $this->id;
-        }
+        $columns = array_keys($row);
 
-        $record->menuId = $this->menuId;
-        $record->linkedElementId = $this->linkedElementId;
-        $record->nodeType = $this->nodeType;
-        $record->customUrl = $this->customUrl;
-        $record->classes = $this->classes;
-        $record->urlSuffix = $this->urlSuffix;
-        $record->customAttributes = is_array($this->customAttributes) ? Json::encode($this->customAttributes) : $this->customAttributes;
-        $record->data = is_array($this->data) ? Json::encode($this->data) : $this->data;
-        $record->newWindow = $this->newWindow;
-        $record->icon = $this->icon;
-        $record->badge = $this->badge;
-        $record->visibilityRules = is_array($this->visibilityRules) ? Json::encode($this->visibilityRules) : $this->visibilityRules;
-        $record->deletedWithMenu = $this->deletedWithMenu;
+        DB::table('freenav_nodes')->upsert(
+            [$row + ['dateCreated' => $now, 'uid' => $this->uid]],
+            uniqueBy: ['id'],
+            update: $columns,
+        );
 
-        $record->save(false);
-
-        // Invalidate menu cache
-        if ($this->menuId) {
-            try {
-                $menu = $this->getMenu();
-                FreeNav::getInstance()->getMenuCache()->invalidate($menu->handle);
-            } catch (InvalidConfigException) {
-            }
+        if ($this->linkedElementId) {
+            app(Nodes::class)->forgetLinkedElementIds();
         }
 
         parent::afterSave($isNew);
     }
 
-    public function afterMoveInStructure(int $structureId): void
+    /**
+     * @param  array<mixed>|string|null  $value
+     */
+    private static function encodeJsonColumn(array|string|null $value): ?string
     {
-        // Reordering a node changes the rendered menu without saving the element,
-        // so the cache has to be invalidated off the move itself
-        if ($this->menuId) {
-            try {
-                FreeNav::getInstance()->getMenuCache()->invalidate($this->getMenu()->handle);
-            } catch (InvalidConfigException) {
+        if (is_array($value)) {
+            return $value === [] ? null : (string) Json::encode($value);
+        }
+
+        return $value === '' ? null : $value;
+    }
+
+    /**
+     * The menu's rendered HTML depends on the node, and the cache entries carry this tag (as Craft
+     * namespaces it: `element::<Node class>::menu:<handle>`), so saving or deleting a node clears them.
+     */
+    #[Override]
+    protected function cacheTags(): array
+    {
+        try {
+            return $this->menuId ? ['menu:'.$this->getMenu()->handle] : [];
+        } catch (RuntimeException) {
+            return [];
+        }
+    }
+
+    /**
+     * The node editor posts every field in the menu's layout. Only node settings are taken from it,
+     * and the JSON fields arrive as text.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    #[Override]
+    public function setAttributesFromRequest(array $values): void
+    {
+        $values = array_intersect_key($values, array_flip(self::EDITABLE_ATTRIBUTES));
+
+        foreach (['customAttributes', 'visibilityRules'] as $json) {
+            if (array_key_exists($json, $values) && is_string($values[$json])) {
+                $text = trim($values[$json]);
+                $decoded = $text === '' ? null : Json::decodeIfJson($text);
+                // Text that isn't JSON is kept as typed, so validation can say so instead of
+                // silently emptying the field.
+                $values[$json] = is_array($decoded) || $decoded === null ? $decoded : $text;
             }
         }
 
-        parent::afterMoveInStructure($structureId);
+        parent::setAttributesFromRequest($values);
     }
 
-    public function afterDelete(): void
+    // Permissions
+    // -------------------------------------------------------------------------
+
+    #[Override]
+    public function canView(User $user): bool
     {
-        // Invalidate menu cache
-        if ($this->menuId) {
-            try {
-                $menu = $this->getMenu();
-                FreeNav::getInstance()->getMenuCache()->invalidate($menu->handle);
-            } catch (InvalidConfigException) {
-            }
+        try {
+            $menu = $this->getMenu();
+        } catch (RuntimeException) {
+            return false;
         }
 
-        parent::afterDelete();
+        $menus = app(Menus::class);
+
+        return $menus->canEditNodes($user, $menu) || $menus->canManageMenu($user, $menu);
     }
 
-    protected function defineRules(): array
+    #[Override]
+    public function canSave(User $user): bool
     {
-        $rules = parent::defineRules();
-        $rules[] = [['customUrl'], function(string $attribute) {
-            if ($this->customUrl && $this->getNodeType() === NodeTypeEnum::Custom && $this->_parseUrl($this->customUrl) === null) {
-                $this->addError($attribute, Craft::t('free-nav', 'Use a web address, a path, an anchor, or a mailto:, tel: or sms: link. Environment variables and aliases must resolve to an http(s) address.'));
-            }
-        }, 'skipOnEmpty' => true];
-
-        return $rules;
+        try {
+            return app(Menus::class)->canEditNodes($user, $this->getMenu());
+        } catch (RuntimeException) {
+            return false;
+        }
     }
 
-    public function canView(\craft\elements\User $user): bool
+    #[Override]
+    public function canDelete(User $user): bool
     {
-        return true;
+        try {
+            return app(Menus::class)->canDeleteNodes($user, $this->getMenu());
+        } catch (RuntimeException) {
+            return false;
+        }
     }
 
-    public function canSave(\craft\elements\User $user): bool
+    // Control panel
+    // -------------------------------------------------------------------------
+
+    #[Override]
+    protected function cpEditUrl(): ?string
     {
-        if ($this->menuId) {
-            try {
-                $menu = $this->getMenu();
-                return $user->can('freeNav-editNodes:' . $menu->uid)
-                    || $user->can('freeNav-editNodes');
-            } catch (InvalidConfigException) {
-            }
+        return ElementHelper::elementEditorUrl($this, false);
+    }
+
+    #[Override]
+    public function getPostEditUrl(): ?string
+    {
+        return $this->menuId ? cp_url("free-nav/menus/{$this->menuId}/build") : cp_url('free-nav/menus');
+    }
+
+    #[Override]
+    protected function crumbs(): array
+    {
+        $crumbs = [
+            new ActionItem()->label(t('Menus', category: 'free-nav'))->href(cp_url('free-nav/menus')),
+        ];
+
+        try {
+            $menu = $this->getMenu();
+            $crumbs[] = new ActionItem()->label((string) $menu->name)->href(cp_url("free-nav/menus/{$menu->id}/build"));
+        } catch (RuntimeException) {
         }
 
-        return $user->can('freeNav-editNodes');
+        return $crumbs;
     }
 
-    public function canDelete(\craft\elements\User $user): bool
+    #[Override]
+    protected function metadata(): array
     {
-        if ($this->menuId) {
-            try {
-                $menu = $this->getMenu();
-                return $user->can('freeNav-deleteNodes:' . $menu->uid)
-                    || $user->can('freeNav-deleteNodes');
-            } catch (InvalidConfigException) {
-            }
-        }
+        $linked = $this->isElement() ? $this->getLinkedElement() : null;
 
-        return $user->can('freeNav-deleteNodes');
+        return [
+            t('Node Type', category: 'free-nav') => Html::encode($this->getNodeType()->label()),
+            t('Linked element', category: 'free-nav') => $linked
+                ? (($cpUrl = $linked->getCpEditUrl()) ? Html::a(Html::encode((string) $linked->title), $cpUrl) : Html::encode((string) $linked->title))
+                : false,
+            t('URL', category: 'free-nav') => ($url = $this->getUrl()) !== null ? Html::tag('code', Html::encode($url)) : false,
+        ];
     }
 
-    protected function attributeHtml(string $attribute): string
-    {
-        return match ($attribute) {
-            'nodeType' => Html::tag('span', $this->getNodeType()->label(), [
-                'style' => 'color: ' . $this->getNodeType()->color(),
-            ]),
-            'newWindow' => $this->newWindow ? '<span data-icon="check"></span>' : '',
-            default => parent::attributeHtml($attribute),
-        };
-    }
+    // Custom URLs and custom attributes: the two things editors write that end up in every page.
+    // -------------------------------------------------------------------------
 
     /**
      * The custom URL a visitor may follow, or null.
      *
      * Anyone with "edit nodes" writes this, and it ends up in an `href` on every page and in the
      * REST API. So until 5.1.5 two things were possible that should not be: a `javascript:` link,
-     * and `$CRAFT_SECURITY_KEY` (or any other secret) resolved by `parseEnv()` and printed for
-     * the world. Environment variables and aliases now have to come out as an http(s) address,
-     * and only link schemes that cannot run anything are allowed through.
+     * and `$CRAFT_SECURITY_KEY` (or any other secret) resolved and printed for the world.
+     * Environment variables and aliases now have to come out as an http(s) address, and only link
+     * schemes that cannot run anything are allowed through.
      */
-    private function _parseUrl(?string $url): ?string
+    public static function resolveCustomUrl(?string $url): ?string
     {
-        $url = trim((string)$url);
+        $url = trim((string) $url);
 
         if ($url === '') {
             return null;
         }
 
         if (str_starts_with($url, '$') || str_starts_with($url, '@')) {
-            $resolved = str_starts_with($url, '$') ? App::parseEnv($url) : Craft::getAlias($url, false);
+            // One variable (`$PRIMARY_SITE_URL/about`) or one alias (`@web/about`), nothing nested:
+            // Craft 6 also expands `${VAR}` anywhere in a string, which would let a URL carry a
+            // secret in its query string.
+            if (! preg_match('~^(\$[A-Za-z_][A-Za-z0-9_]*|@[A-Za-z0-9_-]+)(/[^$]*)?$~', $url)) {
+                return null;
+            }
 
-            if (!is_string($resolved) || !preg_match('~^https?://[^/?#@\s]+(?:[/?#]\S*)?$~i', $resolved)) {
+            $resolved = Env::parse($url);
+
+            if (! is_string($resolved) || ! preg_match('~^https?://[^/?#@\s]+(?:[/?#]\S*)?$~i', $resolved)) {
                 return null;
             }
 
@@ -734,5 +879,73 @@ class Node extends Element
         }
 
         return $url;
+    }
+
+    /**
+     * Attribute names a custom attribute may use on a front-end link.
+     *
+     * Custom attributes are written by anyone who can edit a menu, and land on every page that
+     * renders it, so this is an allowlist: `aria-*`, `data-*`, and a handful of plain attributes
+     * (`title`, `rel`, `id`, `lang`, `role`, `itemprop`…). Event handlers, URL attributes and
+     * `style` are not on it, and neither are front-end framework directives that run code from
+     * an attribute's value: Alpine (`x-*`), htmx (`hx-*`, `data-hx-*`), Vue (`v-*`), Angular
+     * (`ng-*`, `data-ng-*`) and Datastar's script-running `data-*` attributes.
+     */
+    public static function isSafeAttributeName(string $name): bool
+    {
+        $lower = strtolower($name);
+
+        if (in_array($lower, [
+            'title', 'rel', 'id', 'lang', 'dir', 'role', 'tabindex', 'accesskey', 'translate',
+            'hreflang', 'download', 'type', 'itemprop', 'itemscope', 'itemtype', 'itemid', 'referrerpolicy',
+        ], true)) {
+            return true;
+        }
+
+        if (preg_match('/^aria-[a-z]+$/', $lower)) {
+            return true;
+        }
+
+        if (! preg_match('/^data-[a-z0-9][a-z0-9_-]*$/', $lower)) {
+            return false;
+        }
+
+        // data-* attributes that front-end frameworks evaluate as code: htmx and Angular's data-
+        // forms, and Datastar's attribute plugins. A site running some other framework that
+        // executes data-* attributes should treat menu editors as trusted.
+        return ! preg_match('/^data-(hx-|ng-|x-|v-|on|bind|attr|signals|json-signals|effect|computed|init|ref|indicator|persist|text|show|class|style|model|ignore|scroll-into-view|view-transition|replace-url|query-string|custom-validity|preserve-attr|star-|animate|match-media|store|intersects|teleport)/', $lower);
+    }
+
+    /**
+     * A custom attribute's value as text, or null when it isn't text.
+     *
+     * Only scalars: Craft's HTML helper expands an array value for `data`/`aria`-style names into
+     * further attributes whose names nobody checked.
+     */
+    public static function customAttributeValue(mixed $value): ?string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        return is_scalar($value) ? (string) $value : null;
+    }
+
+    /**
+     * Drops custom attributes with unsafe names or non-text values. For imports, where one bad
+     * attribute shouldn't stop the whole node, or menu, from coming across.
+     *
+     * @param  array<mixed>|null  $attributes
+     * @return array<mixed>|null
+     */
+    public static function safeCustomAttributes(?array $attributes): ?array
+    {
+        if ($attributes === null) {
+            return null;
+        }
+
+        return array_values(array_filter($attributes, fn ($attr) => is_array($attr)
+            && self::isSafeAttributeName(trim((string) ($attr['key'] ?? '')))
+            && self::customAttributeValue($attr['value'] ?? null) !== null));
     }
 }

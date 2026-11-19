@@ -1,36 +1,32 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\FieldLayoutElements;
 
-use Craft;
-use craft\base\ElementInterface;
-use craft\fieldlayoutelements\BaseNativeField;
-use JustinHoltWeb\FreeNav\Elements\Node;
+use CraftCms\Cms\Element\Contracts\ElementInterface;
+use CraftCms\Cms\FieldLayout\LayoutElements\TextField;
+use Override;
 
-class UrlSuffixField extends BaseNativeField
+use function CraftCms\Cms\t;
+
+class UrlSuffixField extends TextField
 {
     public string $attribute = 'urlSuffix';
+
     public bool $requirable = false;
 
-    public function defaultLabel(?ElementInterface $element = null, bool $static = false): ?string
+    public ?string $placeholder = '#section';
+
+    #[Override]
+    protected function defaultLabel(?ElementInterface $element = null, bool $static = false): ?string
     {
-        return Craft::t('free-nav', 'URL Suffix');
+        return t('URL Suffix', category: 'free-nav');
     }
 
-    public function instructions(?ElementInterface $element = null, bool $static = false): ?string
+    #[Override]
+    protected function defaultInstructions(?ElementInterface $element = null, bool $static = false): ?string
     {
-        return Craft::t('free-nav', 'Appended to the URL (e.g., "#section" or "?ref=nav").');
-    }
-
-    protected function inputHtml(?ElementInterface $element = null, bool $static = false): ?string
-    {
-        /** @var Node|null $element */
-        return Craft::$app->getView()->renderTemplate('_includes/forms/text', [
-            'id' => 'urlSuffix',
-            'name' => 'urlSuffix',
-            'value' => $element?->urlSuffix ?? '',
-            'placeholder' => '#section',
-            'class' => 'code',
-        ]);
+        return t('Appended to the URL (e.g., "#section" or "?ref=nav").', category: 'free-nav');
     }
 }

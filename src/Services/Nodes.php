@@ -1,23 +1,31 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Services;
 
-use Craft;
-use craft\base\Element;
-use JustinHoltWeb\FreeNav\Elements\Queries\NodeQuery;
+use CraftCms\Cms\Database\Table;
+use CraftCms\Cms\Element\Contracts\ElementInterface;
+use CraftCms\Cms\Element\ElementHelper;
+use CraftCms\Cms\Structure\Enums\Mode;
+use CraftCms\Cms\Support\Facades\Elements;
+use CraftCms\Cms\Support\Facades\Sites;
+use CraftCms\Cms\Support\Facades\Structures;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use JustinHoltWeb\FreeNav\Elements\Node;
+use JustinHoltWeb\FreeNav\Elements\Queries\NodeQuery;
 use JustinHoltWeb\FreeNav\Enums\NodeType;
 use JustinHoltWeb\FreeNav\Models\Menu;
-use yii\base\Component;
 
-class Nodes extends Component
+class Nodes
 {
     /**
      * Every node in a menu, once each, regardless of which sites it lives in.
      *
-     * Management operations (export, delete, resave, counts) have to span sites: a
-     * menu enabled only for a non-primary site has no nodes on the current site, so a
-     * site-scoped query silently returns nothing. Rendering stays site-scoped.
+     * Management operations (export, delete, resave, counts) have to span sites: a menu enabled
+     * only for a non-primary site has no nodes on the current site, so a site-scoped query
+     * silently returns nothing. Rendering stays site-scoped.
      */
     public function findNodesInMenu(int $menuId): NodeQuery
     {
@@ -26,78 +34,137 @@ class Nodes extends Component
             ->siteId('*')
             ->unique()
             ->status(null)
-            ->orderBy(['lft' => SORT_ASC]);
+            ->orderBy('lft');
     }
 
+    /**
+     * @return Node[]
+     */
     public function getNodesByMenuId(int $menuId, ?int $siteId = null): array
     {
         return Node::find()
             ->menuId($menuId)
             ->siteId($siteId)
             ->status(null)
-            ->orderBy(['lft' => SORT_ASC])
+            ->orderBy('lft')
             ->all();
     }
 
     /**
-     * Counts a menu's nodes the way the builder lists them: every node in the menu on
-     * one site, disabled ones included. Leaving the defaults in place would count only
-     * enabled nodes on whatever site the request happens to be on.
+     * Counts a menu's nodes the way the tree lists them: every node in the menu on one site,
+     * disabled ones included.
      */
     public function getNodeCount(int $menuId, ?int $siteId = null): int
     {
-        return (int)Node::find()
+        return Node::find()
             ->menuId($menuId)
             ->siteId($siteId)
             ->status(null)
             ->count();
     }
 
+    /**
+     * @param  array<string, mixed>  $criteria
+     */
     public function getNodesByMenuHandle(string $handle, array $criteria = []): NodeQuery
     {
-        $query = Node::find()
-            ->menuHandle($handle);
+        $query = Node::find()->menuHandle($handle);
 
         foreach ($criteria as $key => $value) {
-            if (method_exists($query, $key)) {
-                $query->$key($value);
-            } else {
-                $query->$key = $value;
-            }
+            $query->$key = $value;
         }
 
         return $query;
     }
 
-    public function syncNodeFromElement(Element $element): void
+    /** @var array<int, bool>|null IDs of elements some node links to, for this request */
+    private ?array $linkedElementIds = null;
+
+    /** @var array<string, string> Titles linked elements had before the save in progress, by `id:siteId` */
+    private array $previousTitles = [];
+
+    /**
+     * Notes a linked element's title before it's saved, so the sync afterwards can tell a node
+     * that still shows the element's title from one an editor renamed.
+     */
+    public function rememberTitleBeforeSave(ElementInterface $element): void
     {
+        if ($element instanceof Node || ! $element->id || ! $element->siteId || ElementHelper::isDraftOrRevision($element)) {
+            return;
+        }
+
+        $this->linkedElementIds ??= DB::table('freenav_nodes')
+            ->whereNotNull('linkedElementId')
+            ->distinct()
+            ->pluck('linkedElementId')
+            ->mapWithKeys(fn ($id) => [(int) $id => true])
+            ->all();
+
+        if (! isset($this->linkedElementIds[$element->id])) {
+            return;
+        }
+
+        $title = DB::table(Table::ELEMENTS_SITES)
+            ->where('elementId', $element->id)
+            ->where('siteId', $element->siteId)
+            ->value('title');
+
+        if (is_string($title)) {
+            $this->previousTitles[$element->id.':'.$element->siteId] = $title;
+        }
+    }
+
+    /**
+     * Keeps linked nodes' titles in step with the element they link to, unless an editor gave
+     * the node a title of its own.
+     */
+    public function syncNodeFromElement(ElementInterface $element): void
+    {
+        if ($element instanceof Node || ! $element->id || ElementHelper::isDraftOrRevision($element)) {
+            return;
+        }
+
+        $key = $element->id.':'.$element->siteId;
+        $previous = $this->previousTitles[$key] ?? null;
+        unset($this->previousTitles[$key]);
+
+        if ($previous === null || $previous === $element->title) {
+            return;
+        }
+
         $nodes = Node::find()
             ->linkedElementId($element->id)
             ->siteId($element->siteId)
             ->status(null)
             ->all();
 
-        if (empty($nodes)) {
-            return;
-        }
-
         foreach ($nodes as $node) {
-            $changed = false;
-
-            // Sync title if not overridden
-            if (!$node->hasOverriddenTitle() && $node->title !== $element->title) {
-                $node->title = $element->title;
-                $changed = true;
-            }
-
-            if ($changed) {
-                Craft::$app->getElements()->saveElement($node, false);
+            // A node whose title differs from what the element was called has its own title.
+            if ($node->title === $previous) {
+                $node->title = (string) $element->title;
+                Elements::saveElement($node, false);
             }
         }
     }
 
-    public function handleDeletedElement(Element $element): void
+    /**
+     * New links change which elements are worth watching.
+     */
+    public function forgetLinkedElementIds(): void
     {
+        $this->linkedElementIds = null;
+    }
+
+    /**
+     * A linked element was deleted: its nodes become custom URL nodes pointing at where it used
+     * to be, or are disabled when it had no URL.
+     */
+    public function handleDeletedElement(ElementInterface $element): void
+    {
+        if ($element instanceof Node || ! $element->id || ElementHelper::isDraftOrRevision($element)) {
+            return;
+        }
+
         $nodes = Node::find()
             ->linkedElementId($element->id)
             ->siteId('*')
@@ -106,93 +173,36 @@ class Nodes extends Component
             ->all();
 
         foreach ($nodes as $node) {
-            // Convert to custom URL node with cached URL, or disable
             $url = $element->getUrl();
 
             if ($url) {
                 $node->nodeType = NodeType::Custom->value;
                 $node->customUrl = $url;
-                $node->linkedElementId = null;
-                Craft::$app->getElements()->saveElement($node, false);
             } else {
                 $node->enabled = false;
-                $node->linkedElementId = null;
-                Craft::$app->getElements()->saveElement($node, false);
             }
+
+            $node->linkedElementId = null;
+            Elements::saveElement($node, false);
         }
     }
 
-    public function getParentOptions(Menu $menu, ?Node $exclude = null, ?int $siteId = null): array
-    {
-        $options = [
-            ['label' => '—', 'value' => ''],
-        ];
-
-        $nodes = Node::find()
-            ->menuId($menu->id)
-            ->siteId($siteId)
-            ->status(null)
-            ->orderBy(['lft' => SORT_ASC])
-            ->all();
-
-        foreach ($nodes as $node) {
-            if ($exclude && $node->id === $exclude->id) {
-                continue;
-            }
-
-            $prefix = str_repeat('    ', max(0, $node->level - 1));
-            $options[] = [
-                'label' => $prefix . $node->title,
-                'value' => $node->id,
-            ];
-        }
-
-        return $options;
-    }
-
-    public function addNodes(Menu $menu, array $nodeDataArray): array
+    /**
+     * Creates nodes in a menu from plain data — the add-node form, imports and the Verbb
+     * migration all come through here.
+     *
+     * @param  array<int, array<string, mixed>>  $nodeDataArray
+     * @return Node[]
+     */
+    public function addNodes(Menu $menu, array $nodeDataArray, bool $runValidation = true): array
     {
         $nodes = [];
 
         foreach ($nodeDataArray as $nodeData) {
-            $node = new Node();
-            $node->menuId = $menu->id;
-            $node->title = $nodeData['title'] ?? '';
-            $node->nodeType = $nodeData['nodeType'] ?? NodeType::Custom->value;
-            $node->linkedElementId = $nodeData['linkedElementId'] ?? null;
-            // 'url' is accepted for backwards compatibility with older exports
-            $node->customUrl = $nodeData['customUrl'] ?? $nodeData['url'] ?? null;
-            $node->classes = $nodeData['classes'] ?? null;
-            $node->urlSuffix = $nodeData['urlSuffix'] ?? null;
-            $node->customAttributes = $nodeData['customAttributes'] ?? null;
-            $node->data = $nodeData['data'] ?? null;
-            $node->newWindow = $nodeData['newWindow'] ?? false;
-            $node->icon = $nodeData['icon'] ?? null;
-            $node->badge = $nodeData['badge'] ?? null;
-            $node->visibilityRules = $nodeData['visibilityRules'] ?? null;
-            $node->enabled = $nodeData['enabled'] ?? true;
+            $node = $this->makeNode($menu, $nodeData);
 
-            // Set site. Nodes can only be saved to sites the menu is enabled for, so
-            // fall back to one of those rather than whatever site the request is on.
-            $node->siteId = $nodeData['siteId'] ?? $this->getDefaultSiteId($menu);
-
-            // If element-linked, auto-set title from element
-            if ($node->linkedElementId && empty($node->title)) {
-                $nodeTypeEnum = NodeType::tryFrom($node->nodeType);
-                if ($nodeTypeEnum && $nodeTypeEnum->elementType()) {
-                    $element = Craft::$app->getElements()->getElementById(
-                        $node->linkedElementId,
-                        $nodeTypeEnum->elementType(),
-                        $node->siteId,
-                    );
-                    if ($element) {
-                        $node->title = $element->title ?? '';
-                    }
-                }
-            }
-
-            if (Craft::$app->getElements()->saveElement($node)) {
-                $parent = $this->findNodeInMenu($menu, $nodeData['parentId'] ?? null, $node->siteId);
+            if (Elements::saveElement($node, $runValidation)) {
+                $parent = $this->findNodeInMenu($menu, $nodeData['parentId'] ?? null, (int) $node->siteId);
                 $this->placeNode($menu, $node, $parent);
 
                 $nodes[] = $node;
@@ -203,25 +213,65 @@ class Nodes extends Component
     }
 
     /**
+     * An unsaved node built from plain data.
+     *
+     * @param  array<string, mixed>  $nodeData
+     */
+    public function makeNode(Menu $menu, array $nodeData): Node
+    {
+        $node = new Node;
+        $node->menuId = $menu->id;
+        $node->title = (string) ($nodeData['title'] ?? '');
+        $node->nodeType = (string) ($nodeData['nodeType'] ?? NodeType::Custom->value);
+        $node->linkedElementId = isset($nodeData['linkedElementId']) && $nodeData['linkedElementId'] !== '' ? (int) $nodeData['linkedElementId'] : null;
+        // 'url' is accepted for backwards compatibility with older exports
+        $node->customUrl = $nodeData['customUrl'] ?? $nodeData['url'] ?? null;
+        $node->classes = $nodeData['classes'] ?? null;
+        $node->urlSuffix = $nodeData['urlSuffix'] ?? null;
+        $node->customAttributes = $nodeData['customAttributes'] ?? null;
+        $node->data = $nodeData['data'] ?? null;
+        $node->newWindow = (bool) ($nodeData['newWindow'] ?? false);
+        $node->icon = $nodeData['icon'] ?? null;
+        $node->badge = $nodeData['badge'] ?? null;
+        $node->visibilityRules = $nodeData['visibilityRules'] ?? null;
+        $node->enabled = (bool) ($nodeData['enabled'] ?? true);
+
+        // Nodes can only be saved to sites the menu is enabled for, so fall back to one of those
+        // rather than whatever site the request is on.
+        $siteId = isset($nodeData['siteId']) ? (int) $nodeData['siteId'] : null;
+        $node->siteId = $siteId && $menu->isEnabledForSite($siteId) ? $siteId : $this->getDefaultSiteId($menu);
+
+        // Only an element of the class the node type links to.
+        $elementType = NodeType::tryFrom($node->nodeType)?->elementType();
+
+        if (! $elementType) {
+            $node->linkedElementId = null;
+        } elseif ($node->linkedElementId && $node->title === '') {
+            $element = Elements::getElementById($node->linkedElementId, $elementType, $node->siteId);
+            $node->title = (string) ($element->title ?? '');
+        }
+
+        return $node;
+    }
+
+    /**
      * Places a newly created node in its menu's structure, under $parent if given.
      */
     public function placeNode(Menu $menu, Node $node, ?Node $parent = null): bool
     {
-        if (!$menu->structureId) {
+        if (! $menu->structureId) {
             return false;
         }
 
-        $structures = Craft::$app->getStructures();
-
         if ($parent) {
-            return $structures->append($menu->structureId, $node, $parent);
+            return Structures::append($menu->structureId, $node, $parent, Mode::Insert);
         }
 
         if ($menu->defaultPlacement === 'beginning') {
-            return $structures->prependToRoot($menu->structureId, $node);
+            return Structures::prependToRoot($menu->structureId, $node, Mode::Insert);
         }
 
-        return $structures->appendToRoot($menu->structureId, $node);
+        return Structures::appendToRoot($menu->structureId, $node, Mode::Insert);
     }
 
     /**
@@ -229,34 +279,31 @@ class Nodes extends Component
      */
     public function moveNode(Menu $menu, Node $node, ?Node $parent = null, ?Node $prevSibling = null): bool
     {
-        if (!$menu->structureId) {
+        if (! $menu->structureId) {
             return false;
         }
 
-        $structures = Craft::$app->getStructures();
-
         if ($prevSibling) {
-            return $structures->moveAfter($menu->structureId, $node, $prevSibling);
+            return Structures::moveAfter($menu->structureId, $node, $prevSibling);
         }
 
         if ($parent) {
-            return $structures->prepend($menu->structureId, $node, $parent);
+            return Structures::prepend($menu->structureId, $node, $parent);
         }
 
-        return $structures->prependToRoot($menu->structureId, $node);
+        return Structures::prependToRoot($menu->structureId, $node);
     }
 
     /**
      * Resolves a node ID to a node in the given menu.
      *
-     * Node hierarchy is site-agnostic (it lives in the menu's structure), but a node
-     * only has rows for the sites its menu propagates to. Looking one up against the
-     * current site would miss nodes that live on another site, so search all sites and
-     * prefer $preferSiteId.
+     * Node hierarchy is site-agnostic (it lives in the menu's structure), but a node only has rows
+     * for the sites its menu propagates to. Looking one up against the current site would miss
+     * nodes that live on another site, so search all sites and prefer $preferSiteId.
      */
     public function findNodeInMenu(Menu $menu, mixed $nodeId, ?int $preferSiteId = null): ?Node
     {
-        if (!$nodeId) {
+        if (! $nodeId) {
             return null;
         }
 
@@ -273,23 +320,20 @@ class Nodes extends Component
 
         $node = $query->one();
 
-        if (!$node) {
-            Craft::warning(
-                "Node $nodeId was not found in menu \"$menu->handle\".",
-                __METHOD__,
-            );
+        if (! $node) {
+            Log::warning("FreeNav: node {$nodeId} was not found in menu “{$menu->handle}”.");
         }
 
         return $node;
     }
 
     /**
-     * The site a new node should be created on: the current site when the menu is
-     * enabled for it, otherwise the menu's first enabled site.
+     * The site a new node should be created on: the current site when the menu is enabled for it,
+     * otherwise the menu's first enabled site.
      */
     public function getDefaultSiteId(Menu $menu): int
     {
-        $currentSiteId = Craft::$app->getSites()->getCurrentSite()->id;
+        $currentSiteId = (int) Sites::getCurrentSite()->id;
 
         if ($menu->isEnabledForSite($currentSiteId)) {
             return $currentSiteId;
@@ -297,6 +341,6 @@ class Nodes extends Component
 
         $enabledSiteIds = $menu->getEnabledSiteIds();
 
-        return reset($enabledSiteIds);
+        return (int) reset($enabledSiteIds);
     }
 }

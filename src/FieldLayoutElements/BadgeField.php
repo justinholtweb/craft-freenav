@@ -1,36 +1,32 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\FieldLayoutElements;
 
-use Craft;
-use craft\base\ElementInterface;
-use craft\fieldlayoutelements\BaseNativeField;
-use JustinHoltWeb\FreeNav\Elements\Node;
+use CraftCms\Cms\Element\Contracts\ElementInterface;
+use CraftCms\Cms\FieldLayout\LayoutElements\TextField;
+use Override;
 
-class BadgeField extends BaseNativeField
+use function CraftCms\Cms\t;
+
+class BadgeField extends TextField
 {
     public string $attribute = 'badge';
+
     public bool $requirable = false;
 
-    public function defaultLabel(?ElementInterface $element = null, bool $static = false): ?string
+    public ?string $placeholder = 'New';
+
+    #[Override]
+    protected function defaultLabel(?ElementInterface $element = null, bool $static = false): ?string
     {
-        return Craft::t('free-nav', 'Badge Text');
+        return t('Badge Text', category: 'free-nav');
     }
 
-    public function instructions(?ElementInterface $element = null, bool $static = false): ?string
+    #[Override]
+    protected function defaultInstructions(?ElementInterface $element = null, bool $static = false): ?string
     {
-        return Craft::t('free-nav', 'Optional badge text displayed next to the node title (e.g., "New", "Sale").');
-    }
-
-    protected function inputHtml(?ElementInterface $element = null, bool $static = false): ?string
-    {
-        /** @var Node|null $element */
-        return Craft::$app->getView()->renderTemplate('_includes/forms/text', [
-            'id' => 'badge',
-            'name' => 'badge',
-            'value' => $element?->badge ?? '',
-            'placeholder' => 'New',
-            'size' => 20,
-        ]);
+        return t('Optional badge text displayed next to the node title (e.g., "New", "Sale").', category: 'free-nav');
     }
 }

@@ -1,52 +1,77 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Variables;
 
-use JustinHoltWeb\FreeNav\Elements\Queries\NodeQuery;
+use Illuminate\Support\HtmlString;
 use JustinHoltWeb\FreeNav\Elements\Node;
-use JustinHoltWeb\FreeNav\FreeNav;
+use JustinHoltWeb\FreeNav\Elements\Queries\NodeQuery;
 use JustinHoltWeb\FreeNav\Models\Menu;
-use Twig\Markup;
+use JustinHoltWeb\FreeNav\Services\Breadcrumbs;
+use JustinHoltWeb\FreeNav\Services\Menus;
+use JustinHoltWeb\FreeNav\Services\Nodes;
+use JustinHoltWeb\FreeNav\Services\Renderer;
 
+/**
+ * `craft.freenav` in Twig (and `$craft->freenav` in Blade).
+ */
 class FreeNavVariable
 {
-    public function render(string $handle, array $options = []): Markup
+    /**
+     * @param  array<string, mixed>  $options
+     */
+    public function render(string $handle, array $options = []): HtmlString
     {
-        return FreeNav::getInstance()->getRenderer()->render($handle, $options);
+        return app(Renderer::class)->render($handle, $options);
     }
 
+    /**
+     * @param  array<string, mixed>  $criteria
+     */
     public function nodes(string $handle, array $criteria = []): NodeQuery
     {
-        return FreeNav::getInstance()->getNodes()->getNodesByMenuHandle($handle, $criteria);
+        return app(Nodes::class)->getNodesByMenuHandle($handle, $criteria);
     }
 
+    /**
+     * @param  array<string, mixed>  $criteria
+     * @return list<array{node: Node, children: array<mixed>}>
+     */
     public function tree(string $handle, array $criteria = []): array
     {
-        return FreeNav::getInstance()->getRenderer()->tree($handle, $criteria);
+        return app(Renderer::class)->tree($handle, $criteria);
     }
 
+    /**
+     * @param  array<string, mixed>  $options
+     * @return list<array<string, mixed>>
+     */
     public function breadcrumbs(array $options = []): array
     {
-        return FreeNav::getInstance()->getBreadcrumbs()->generate($options);
+        return app(Breadcrumbs::class)->generate($options);
     }
 
     public function getActiveNode(string $handle): ?Node
     {
-        return FreeNav::getInstance()->getRenderer()->getActiveNode($handle);
+        return app(Renderer::class)->getActiveNode($handle);
     }
 
     public function getMenuByHandle(string $handle): ?Menu
     {
-        return FreeNav::getInstance()->getMenus()->getMenuByHandle($handle);
+        return app(Menus::class)->getMenuByHandle($handle);
     }
 
     public function getMenuById(int $id): ?Menu
     {
-        return FreeNav::getInstance()->getMenus()->getMenuById($id);
+        return app(Menus::class)->getMenuById($id);
     }
 
+    /**
+     * @return Menu[]
+     */
     public function getAllMenus(): array
     {
-        return FreeNav::getInstance()->getMenus()->getAllMenus();
+        return app(Menus::class)->getAllMenus();
     }
 }

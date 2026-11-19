@@ -1,8 +1,8 @@
 <?php
 
-namespace JustinHoltWeb\FreeNav\Models;
+declare(strict_types=1);
 
-use craft\base\Model;
+namespace JustinHoltWeb\FreeNav\Models;
 
 /**
  * What a menu import did, or why it did nothing.
@@ -11,11 +11,14 @@ use craft\base\Model;
  * was written or removed. `$warnings` are things that imported but may not be what you meant,
  * such as an entry link whose entry doesn't exist in this environment.
  */
-class ImportResult extends Model
+class ImportResult
 {
     public ?Menu $menu = null;
+
     public bool $createdMenu = false;
+
     public int $nodesImported = 0;
+
     public int $nodesRemoved = 0;
 
     /** @var string[] */

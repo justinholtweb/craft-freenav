@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Helpers;
 
 use JustinHoltWeb\FreeNav\Elements\Node;
@@ -15,6 +17,10 @@ class NodeHelper
      *
      * Nodes whose parent is missing from $nodes (filtered out by status or a visibility
      * rule) are dropped along with their descendants, rather than being promoted up.
+     */
+    /**
+     * @param  Node[]  $nodes
+     * @return list<array{node: Node, children: array<mixed>}>
      */
     public static function buildTree(array $nodes): array
     {
@@ -35,22 +41,23 @@ class NodeHelper
                 $skipBelowLevel = null;
             }
 
-            while (!empty($stack) && $stack[count($stack) - 1][1] >= $level) {
+            while (! empty($stack) && $stack[count($stack) - 1][1] >= $level) {
                 array_pop($stack);
             }
 
-            $parentLevel = !empty($stack) ? $stack[count($stack) - 1][1] : 0;
+            $parentLevel = ! empty($stack) ? $stack[count($stack) - 1][1] : 0;
 
             // The node's parent isn't in $nodes (filtered out by status or a visibility
             // rule), so drop the node and its descendants rather than promoting them
             if ($level > $parentLevel + 1) {
                 $skipBelowLevel = $level;
+
                 continue;
             }
 
             $byId[$node->id] = $node;
 
-            if (!empty($stack)) {
+            if (! empty($stack)) {
                 $childIds[$stack[count($stack) - 1][0]][] = $node->id;
             } else {
                 $rootIds[] = $node->id;
@@ -87,11 +94,11 @@ class NodeHelper
         foreach ($nodes as $node) {
             $level = $node->level ?? 1;
 
-            while (!empty($stack) && $stack[count($stack) - 1][1] >= $level) {
+            while (! empty($stack) && $stack[count($stack) - 1][1] >= $level) {
                 array_pop($stack);
             }
 
-            if (!empty($stack)) {
+            if (! empty($stack)) {
                 $map[$node->id] = $stack[count($stack) - 1][0];
             }
 
@@ -110,7 +117,7 @@ class NodeHelper
 
         foreach ($tree as $item) {
             $flat[] = $item['node'];
-            if (!empty($item['children'])) {
+            if (! empty($item['children'])) {
                 $flat = array_merge($flat, self::flattenTree($item['children']));
             }
         }
@@ -123,6 +130,6 @@ class NodeHelper
      */
     public static function filterVisible(array $nodes): array
     {
-        return array_values(array_filter($nodes, fn(Node $node) => $node->isVisible()));
+        return array_values(array_filter($nodes, fn (Node $node) => $node->isVisible()));
     }
 }

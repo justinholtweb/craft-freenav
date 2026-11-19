@@ -1,35 +1,23 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Gql\Arguments;
 
-use craft\gql\base\ElementArguments;
-use GraphQL\Type\Definition\Type;
+use CraftCms\Cms\Gql\Arguments\ElementArguments;
+use JustinHoltWeb\FreeNav\Elements\Node;
+use Override;
 
+/**
+ * The node query's arguments come from the query params `NodeQuery` declares
+ * (`menuId`, `menuHandle`, `nodeType`, `hasUrl`, `linkedElementId`), plus Craft's element and
+ * structure arguments (`level`, `descendantOf`, …).
+ */
 class NodeArguments extends ElementArguments
 {
-    public static function getArguments(): array
+    #[Override]
+    protected static function elementType(): string
     {
-        return array_merge(parent::getArguments(), [
-            'menuHandle' => [
-                'name' => 'menuHandle',
-                'type' => Type::string(),
-                'description' => 'The handle of the menu to query nodes from.',
-            ],
-            'nodeType' => [
-                'name' => 'nodeType',
-                'type' => Type::string(),
-                'description' => 'Filter by node type.',
-            ],
-            'level' => [
-                'name' => 'level',
-                'type' => Type::int(),
-                'description' => 'Filter by nesting level.',
-            ],
-            'hasUrl' => [
-                'name' => 'hasUrl',
-                'type' => Type::boolean(),
-                'description' => 'Filter nodes that have/don\'t have URLs.',
-            ],
-        ]);
+        return Node::class;
     }
 }

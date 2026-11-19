@@ -1,24 +1,30 @@
 <?php
 
-namespace JustinHoltWeb\FreeNav\Models;
+declare(strict_types=1);
 
-use craft\base\Model;
+namespace JustinHoltWeb\FreeNav\Models;
 
 class MenuSiteSettings extends Model
 {
     public ?int $id = null;
+
     public ?int $menuId = null;
+
     public ?int $siteId = null;
+
     public bool $enabled = true;
+
     public mixed $dateCreated = null;
+
     public mixed $dateUpdated = null;
+
     public ?string $uid = null;
 
-    public function defineRules(): array
+    public function getRules(): array
     {
         return [
-            [['menuId', 'siteId'], 'required'],
-            [['enabled'], 'boolean'],
+            'siteId' => ['required', 'integer'],
+            'enabled' => ['boolean'],
         ];
     }
 }

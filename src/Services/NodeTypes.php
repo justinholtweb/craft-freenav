@@ -1,75 +1,73 @@
 <?php
 
+declare(strict_types=1);
+
 namespace JustinHoltWeb\FreeNav\Services;
 
+use Illuminate\Support\Facades\Event;
 use JustinHoltWeb\FreeNav\Enums\NodeType;
-use JustinHoltWeb\FreeNav\Events\RegisterLinkableElementEvent;
-use JustinHoltWeb\FreeNav\Events\RegisterNodeTypeEvent;
-use yii\base\Component;
+use JustinHoltWeb\FreeNav\Events\RegisterLinkableElements;
+use JustinHoltWeb\FreeNav\Events\RegisterNodeTypes;
 
-class NodeTypes extends Component
+class NodeTypes
 {
-    public const EVENT_REGISTER_NODE_TYPES = 'registerNodeTypes';
-    public const EVENT_REGISTER_LINKABLE_ELEMENTS = 'registerLinkableElements';
+    /** @var NodeType[]|null */
+    private ?array $types = null;
 
-    private ?array $_types = null;
-    private ?array $_linkableElements = null;
+    /** @var array<string, array{nodeType: NodeType, elementType: class-string, label: string}>|null */
+    private ?array $linkableElements = null;
 
+    /**
+     * The node types new nodes can be. Categories (gone from Craft 6) and products (until Commerce 6
+     * is installed) aren't offered.
+     *
+     * @return NodeType[]
+     */
     public function getRegisteredTypes(): array
     {
-        if ($this->_types !== null) {
-            return $this->_types;
+        if ($this->types !== null) {
+            return $this->types;
         }
 
-        $this->_types = NodeType::cases();
+        $types = array_values(array_filter(NodeType::cases(), fn (NodeType $type) => $type->isAvailable()));
 
-        // Filter out product type if Commerce not installed
-        $this->_types = array_filter($this->_types, function(NodeType $type) {
-            if ($type === NodeType::Product) {
-                return class_exists('craft\\commerce\\elements\\Product');
-            }
-            return true;
-        });
-
-        // Allow plugins to register additional types
-        if ($this->hasEventHandlers(self::EVENT_REGISTER_NODE_TYPES)) {
-            $event = new RegisterNodeTypeEvent(['types' => $this->_types]);
-            $this->trigger(self::EVENT_REGISTER_NODE_TYPES, $event);
-            $this->_types = $event->types;
+        if (Event::hasListeners(RegisterNodeTypes::class)) {
+            event($event = new RegisterNodeTypes($types));
+            $types = $event->types;
         }
 
-        return $this->_types;
+        return $this->types = $types;
     }
 
+    /**
+     * @return array<string, array{nodeType: NodeType, elementType: class-string, label: string}>
+     */
     public function getLinkableElementTypes(): array
     {
-        if ($this->_linkableElements !== null) {
-            return $this->_linkableElements;
+        if ($this->linkableElements !== null) {
+            return $this->linkableElements;
         }
 
-        $this->_linkableElements = [];
+        $linkable = [];
 
         foreach ($this->getRegisteredTypes() as $type) {
-            if ($type->isElement()) {
-                $elementClass = $type->elementType();
-                if ($elementClass && class_exists($elementClass)) {
-                    $this->_linkableElements[$type->value] = [
-                        'nodeType' => $type,
-                        'elementType' => $elementClass,
-                        'label' => $type->label(),
-                    ];
-                }
+            $elementClass = $type->elementType();
+
+            if ($type->isElement() && $elementClass && class_exists($elementClass)) {
+                $linkable[$type->value] = [
+                    'nodeType' => $type,
+                    'elementType' => $elementClass,
+                    'label' => $type->label(),
+                ];
             }
         }
 
-        // Allow plugins to register additional linkable elements
-        if ($this->hasEventHandlers(self::EVENT_REGISTER_LINKABLE_ELEMENTS)) {
-            $event = new RegisterLinkableElementEvent(['elementTypes' => $this->_linkableElements]);
-            $this->trigger(self::EVENT_REGISTER_LINKABLE_ELEMENTS, $event);
-            $this->_linkableElements = $event->elementTypes;
+        if (Event::hasListeners(RegisterLinkableElements::class)) {
+            event($event = new RegisterLinkableElements($linkable));
+            $linkable = $event->elementTypes;
         }
 
-        return $this->_linkableElements;
+        return $this->linkableElements = $linkable;
     }
 
     public function getTypeLabel(NodeType $type): string
@@ -77,6 +75,9 @@ class NodeTypes extends Component
         return $type->label();
     }
 
+    /**
+     * @return list<array{label: string, value: string, isElement: bool, hasUrl: bool, color: string}>
+     */
     public function getTypeOptions(): array
     {
         $options = [];
