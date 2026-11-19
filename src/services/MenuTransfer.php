@@ -306,11 +306,11 @@ class MenuTransfer extends Component
                 $result->errors[] = Craft::t('free-nav', 'Node {path} has no title.', ['path' => $label]);
             }
 
-            if (!$node->validate(['customUrl'])) {
+            if (!$node->validate(['customUrl', 'urlSuffix'])) {
                 $result->errors[] = Craft::t('free-nav', 'Node {path} (“{title}”): {error}', [
                     'path' => $label,
                     'title' => $node->title,
-                    'error' => $node->getFirstError('customUrl'),
+                    'error' => $node->getFirstError('customUrl') ?? $node->getFirstError('urlSuffix'),
                 ]);
             }
 
