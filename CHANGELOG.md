@@ -1,5 +1,57 @@
 # Changelog
 
+## 6.0.0-beta.1 - Unreleased
+
+FreeNav 6 is a native Craft 6 plugin: it runs on Laravel, with no dependency on the Yii 2 adapter. Menus, nodes, templates, the REST API and GraphQL carry over; see [UPGRADING.md](UPGRADING.md).
+
+### Added
+
+- **Per-menu field layouts.** Each menu's settings have a **Node Fields** designer. It decides which node settings editors see — URL, new window, CSS classes, URL suffix, icon, badge, custom attributes, visibility rules — and takes custom fields, which also appear on the menu's GraphQL type.
+- **Add node** form: node type, the entry or asset to link (Craft's element picker), URL, parent, site, new window and status. It answers JSON when asked, for scripts.
+- Menus can be duplicated, deleted and reordered from **FreeNav > Menus**, and duplicating copies the field layout.
+- The tree opens on a menu's own URL, `free-nav/menus/{id}/build`, with the other menus beside it.
+- Presets are site templates under `_freenav/_presets/`, so a site can override one by creating `templates/_freenav/_presets/_<name>.twig`.
+- A `freenav` global in Twig templates, alongside `craft.freenav`.
+- GraphQL queries take `menuId`, `linkedElementId` and Craft's element and structure arguments, in addition to `menuHandle`, `nodeType` and `hasUrl`.
+
+### Changed
+
+- Requires Craft CMS 6 and PHP 8.5. Upgrading needs FreeNav 5.2.1 first.
+- **The node builder is Craft's own element index.** Each menu's tree is Craft's structure view — drag to reorder and nest, status and delete actions, search — and nodes are edited in Craft's element editor (or its slideout), using the menu's field layout.
+- Console commands are Artisan commands: `php artisan free-nav:menus:index`, `free-nav:menus:resave-nodes`, `free-nav:menus:clear-cache`, `free-nav:menus:export`, `free-nav:menus:import` and `free-nav:migrate:from-navigation`. The FreeNav 5 names (`php craft free-nav/menus/clear-cache`…) still work.
+- The namespace is `JustinHoltWeb\FreeNav` (was `justinholt\freenav`), with capitalised sub-namespaces. The upgrade migration rewrites the class names Craft has stored.
+- FreeNav's events are Laravel events: `MenuSaving`, `MenuSaved`, `MenuDeleting`, `MenuDeleted`, `ResolvingNodeActive`, `RegisterNodeTypes` and `RegisterLinkableElements`.
+- Services are container singletons (`app(Menus::class)`). `FreeNav::getInstance()->getMenus()` and the other getters still work.
+- `render()`, `getLink()`, `getIconHtml()` and `getBadgeHtml()` return `Illuminate\Support\HtmlString` instead of `Twig\Markup`.
+- Plugin settings are on **Settings > Plugins > FreeNav**; JSON import and the Verbb Navigation migration moved to **FreeNav > Import**. Export is in the menus list and in each menu's settings.
+- The REST API's breadcrumbs give each element as `{id, title, url}` rather than the whole element.
+
+### Removed
+
+- Category nodes. Craft 6 has no categories. The upgrade migration turns category nodes into entry nodes when Craft's conversion made their category an entry (it keeps element IDs), and otherwise into custom URL nodes pointing where the category was. FreeNav 5 export files and Verbb Navigation data with category links import as entry nodes.
+- Commerce product nodes, until Commerce 6 is released.
+- The FreeNav 5 node builder (`FreeNavBuilder.js`), its slide-out panel, and the `free-nav/nodes/*` and `free-nav/menus/*` action URLs it used.
+
+### Fixed
+
+- Linked nodes' titles follow their element's title, unless an editor gave the node its own. FreeNav 5 compared each node against the element's already-saved new title, so it could take every node for a renamed one and skip the sync.
+- `visibleOnly(true)` on a node query now leaves out hidden nodes. It filters the results after the query runs.
+- The REST API's `get-breadcrumbs` now uses its `uri` parameter.
+- Creating a menu with a handle another menu uses is refused with a message, instead of failing in the database.
+
+### Security
+
+- Ships every 5.2.1 fix: the custom attribute allowlist (refused on save, dropped on import, skipped on render, in the REST API and in GraphQL), linked elements the editor must be able to view, and the URL suffix check. On a site whose front end runs a framework that executes other `data-*` attributes, treat menu editors as trusted.
+- The node editor only sets node settings. A crafted save request can't move a node into another menu or change its type or linked element.
+- A custom URL may name one environment variable or alias (`$PRIMARY_SITE_URL/about`, `@web/about`). Craft 6 expands `${VAR}` anywhere in a string, which would have let a URL carry a secret in its query string, so nested variables are refused.
+
+## 5.2.1 - Unreleased
+### Security
+
+- **Custom attributes could carry script onto the front end.** A node's custom attributes were written onto its link unchecked, so anyone who could edit a menu, or a menu file imported from elsewhere, could add an event handler such as `onmouseover`, a `href` or `style` override, a front-end framework directive that runs code (`x-init`, `hx-get`, `v-html`, `ng-click`…), or an array value that expanded into further attributes. Custom attribute names are now an allowlist — `data-*` (except attributes that front-end frameworks run as code, such as htmx's `data-hx-*` and Datastar's `data-on-*`, `data-text` and `data-show`), `aria-*`, and plain attributes like `title`, `rel`, `id`, `lang`, `role` and `itemprop` — and values must be text. Anything else is refused when a node is saved, dropped from imports (control panel, console and Verbb Navigation), and skipped when a menu renders, which also covers menus saved before this release. Values are escaped as always; on a site whose front end runs a framework that executes other `data-*` attributes, treat menu editors as trusted.
+- **Editors could link to elements they can't see.** Adding a node accepted any element id, so a menu editor could link an entry, asset or product from a section they have no access to and copy its title into the menu, and the node builder's element picker showed the title of any id it was given. Both now require the editor to be able to view the element.
+- **A URL suffix could turn a custom link into a `javascript:` link.** The custom URL was checked on its own, but the link is the URL plus its suffix, so a relative URL such as `java` with a suffix of `script:…` passed. The full link is now checked after the suffix is added, which also covers menus saved before this release, and a suffix must start with `#`, `?`, `&` or `/`.
+
 ## 5.2.0 - 2026-10-09
 ### Added
 

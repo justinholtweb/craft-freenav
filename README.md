@@ -1,6 +1,10 @@
-# FreeNav for Craft CMS 5
+# FreeNav for Craft CMS 6
 
-A free, full-featured navigation menu builder for Craft CMS 5. Build complex navigation menus with a drag-and-drop interface, conditional visibility, caching, accessibility, and more — all without paying a dime.
+A free, full-featured navigation menu builder for Craft CMS 6. Build complex navigation menus with a drag-and-drop tree, conditional visibility, caching, accessibility, and more — all without paying a dime.
+
+> **Beta.** FreeNav 6 is in beta, like Craft 6 itself. Test it on a copy of your site before relying on it in production.
+>
+> **Using Craft 5?** Install FreeNav 5: `composer require justinholtweb/craft-free-nav:^5.2.1`. To move a Craft 5 site to Craft 6, see [UPGRADING.md](UPGRADING.md).
 
 **Developer:** Justin Holt
 **Website:** [craft-freenav.com](https://craft-freenav.com)
@@ -28,8 +32,8 @@ FreeNav provides everything you need to manage navigation in Craft CMS, for free
 
 ## Features
 
-- **Menu Builder** — Drag-and-drop node builder in the Control Panel
-- **Multiple Node Types** — Entry, category, asset, Commerce product, custom URL, passive (no-link), and site nodes
+- **Menu Builder** — Each menu is a drag-and-drop tree in Craft's own element index, and nodes are edited in Craft's element editor
+- **Multiple Node Types** — Entry, asset, custom URL, passive (no-link) and site nodes (Commerce product nodes return with Commerce 6)
 - **Conditional Visibility** — Show/hide nodes based on user group, logged-in state, URL segments, or entry type
 - **Built-in Cache** — Intelligent per-menu cache with automatic invalidation via tagged dependencies
 - **Icon & Badge Support** — Native icon class and badge text fields on every node
@@ -42,7 +46,8 @@ FreeNav provides everything you need to manage navigation in Craft CMS, for free
 - **Breadcrumbs** — URL-segment breadcrumb generation with automatic Craft element resolution
 - **Project Config** — Menu definitions stored in Project Config for environment portability
 - **Permissions** — Granular user permissions (manage menus, edit nodes, delete nodes — per-menu)
-- **Element Syncing** — Node titles and URLs auto-update when linked entries/categories change
+- **Per-menu Field Layouts** — Choose which node settings editors see, and add your own custom fields to nodes
+- **Element Syncing** — Node titles follow their linked entry or asset, and a deleted entry turns its nodes into custom URL nodes
 - **Menu Field Type** — Drop a menu selector into any entry type
 - **Extensible** — Event hooks for custom node types, visibility rules, active state overrides, and render modification
 
@@ -50,21 +55,21 @@ FreeNav provides everything you need to manage navigation in Craft CMS, for free
 
 ## Requirements
 
-- **Craft CMS** 5.0.0+
-- **PHP** 8.2+
+- **Craft CMS** 6.0.0-beta.1+
+- **PHP** 8.5+
 
 ---
 
 ## Installation
 
 ```bash
-composer require justinholtweb/craft-free-nav
+composer require "justinholtweb/craft-free-nav:^6.0@beta"
 ```
 
 Then install from **Settings > Plugins** in the Control Panel, or via CLI:
 
 ```bash
-php craft plugin/install free-nav
+php artisan craft:plugin:install free-nav
 ```
 
 ---
@@ -73,17 +78,20 @@ php craft plugin/install free-nav
 
 ### 1. Create a Menu
 
-Go to **FreeNav > Menus > New menu**. Set a name (`Main Menu`) and handle (`mainMenu`), choose your site settings, and save.
+Go to **FreeNav > Menus > New menu**. Set a name (`Main Menu`) and handle (`mainMenu`), choose your site settings, and save. The **Node Fields** designer at the bottom decides what editors see when they edit a node; it starts with every FreeNav node setting, and you can add custom fields.
 
 ### 2. Build Your Navigation
 
-Click **Build** on your menu. Use the slide-out panel to add nodes:
+Click the menu's name to open its tree, then **Add node**:
 
-- **Entry/Category/Asset** — Select a Craft element (title and URL sync automatically)
-- **Custom URL** — A web address, path, anchor, or `mailto:`/`tel:`/`sms:` link, including environment variables and aliases (`$BASE_URL/about`) as long as they resolve to an `http(s)` address
+- **Entry/Asset** — Pick a Craft element. Leave the title blank to use the element's.
+- **Custom URL** — A web address, path, anchor, or `mailto:`/`tel:`/`sms:` link. An environment variable or alias (`$PRIMARY_SITE_URL/about`, `@web/about`) works when it resolves to an `http(s)` address.
 - **Passive** — A non-linking label (great for dropdown group headings)
+- **Site** — A link to a site, given as a URL
 
-Drag nodes to reorder. Nest them for submenus.
+You can only link an element you're allowed to view. A node's URL suffix (`#team`, `?ref=nav`) has to start with `#`, `?`, `&` or `/`, and the finished link is checked again, so no combination of URL and suffix can make a `javascript:` link.
+
+Drag nodes in the tree to reorder them and nest them for submenus. Click a node to edit it — CSS classes, new window, icon, badge, custom attributes, visibility rules and any custom fields — and use the tree's status and delete actions as with entries.
 
 ### 3. Render in Templates
 
@@ -199,7 +207,7 @@ All methods are accessed via `craft.freenav`:
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `render(handle, options)` | `Markup` | Render a menu as HTML using a preset |
+| `render(handle, options)` | `HtmlString` | Render a menu as HTML using a preset |
 | `nodes(handle, criteria)` | `NodeQuery` | Get an element query for menu nodes |
 | `tree(handle, criteria)` | `array` | Get a hierarchical tree of nodes |
 | `breadcrumbs(options)` | `array` | Generate breadcrumbs from the current URL |
@@ -207,6 +215,10 @@ All methods are accessed via `craft.freenav`:
 | `getMenuByHandle(handle)` | `?Menu` | Get a menu model by handle |
 | `getMenuById(id)` | `?Menu` | Get a menu model by ID |
 | `getAllMenus()` | `Menu[]` | Get all menus |
+
+Twig templates also get a `freenav` global with the same methods (`{{ freenav.render('mainMenu') }}`).
+
+`visibleOnly(true)` on a node query leaves out nodes whose visibility rules hide them from the current visitor. It filters the results after the query runs, so `count()` and `limit()` are not affected.
 
 ---
 
@@ -223,11 +235,15 @@ All methods are accessed via `craft.freenav`:
 | `activeClass` | `string` | `'active'` | CSS class for active items |
 | `hasChildrenClass` | `string` | `'has-children'` | CSS class for items with children |
 | `maxLevel` | `int` | `null` | Limit rendering depth |
-| `overrideTemplate` | `string` | `null` | Custom Twig template path (bypasses presets) |
+| `overrideTemplate` | `string` | `null` | Custom site template path (bypasses presets) |
 | `cache` | `bool` | `true` | Enable/disable caching for this render call |
 | `cacheDuration` | `int` | `3600` | Cache TTL in seconds |
 | `aria` | `bool` | `true` | Enable automatic ARIA attributes |
 | `visibilityCheck` | `bool` | `true` | Apply conditional visibility rules |
+
+### Overriding a Preset
+
+Presets are site templates under `_freenav/_presets/`. To change one for your site, copy it from `vendor/justinholtweb/craft-free-nav/resources/site/_presets/` to `templates/_freenav/_presets/` and edit it there. FreeNav finds your copy first.
 
 ---
 
@@ -240,16 +256,16 @@ Each `Node` element provides:
 | `title` | `string` | Node title (synced from element or custom) |
 | `getUrl()` | `?string` | Resolved URL (element URL, custom URL, or null for passive) |
 | `customUrl` | `?string` | The raw URL typed into the node — use `getUrl()` unless you specifically want this |
-| `getLink()` | `Markup` | Full `<a>` tag with all attributes |
-| `nodeType` | `string` | Type: `entry`, `category`, `asset`, `product`, `custom`, `passive`, `site` |
+| `getLink()` | `HtmlString` | Full `<a>` tag with all attributes |
+| `nodeType` | `string` | Type: `entry`, `asset`, `product`, `custom`, `passive`, `site` |
 | `getNodeType()` | `NodeType` | Enum instance |
 | `classes` | `?string` | CSS classes |
 | `urlSuffix` | `?string` | URL suffix (e.g., `#section`) |
 | `newWindow` | `bool` | Opens in new tab |
 | `icon` | `?string` | Icon CSS class |
 | `badge` | `?string` | Badge text |
-| `getIconHtml()` | `?Markup` | Rendered `<i>` icon tag |
-| `getBadgeHtml()` | `?Markup` | Rendered badge `<span>` |
+| `getIconHtml()` | `?HtmlString` | Rendered `<i>` icon tag |
+| `getBadgeHtml()` | `?HtmlString` | Rendered badge `<span>` |
 | `isActive()` | `bool` | Current page or has active descendant |
 | `isCurrent()` | `bool` | Exact URL match with current page |
 | `hasActiveDescendant()` | `bool` | Any child is current |
@@ -263,8 +279,21 @@ Each `Node` element provides:
 | `getAriaAttributes()` | `array` | Computed ARIA attributes |
 | `level` | `int` | Depth in the menu, starting at 1 |
 | `getParent()` / `getChildren()` | | Craft's structure methods — node hierarchy lives in the menu's structure |
-| `getCustomAttributesArray()` | `array` | Custom `[{key, value}]` attributes |
+| `getCustomAttributesArray()` | `array` | Custom `[{key, value}]` attributes, as stored |
 | `getMenu()` | `Menu` | Parent menu model |
+
+---
+
+## Custom Attributes
+
+Editors can add HTML attributes to a node's link as a JSON list: `[{"key": "data-track", "value": "nav"}]`. They land on every page that renders the menu, so the names are an allowlist:
+
+- `data-*` and `aria-*`
+- plain attributes: `title`, `rel`, `id`, `lang`, `dir`, `role`, `tabindex`, `accesskey`, `translate`, `hreflang`, `download`, `type`, `itemprop`, `itemscope`, `itemtype`, `itemid`, `referrerpolicy`
+
+Event handlers (`onclick`…), URL attributes (`href`, `src`, `formaction`…), `style`, and front-end framework directives that run code — Alpine `x-*`, htmx `hx-*`/`data-hx-*`, Vue `v-*`, Angular `ng-*`/`data-ng-*`, and Datastar's `data-on-*`, `data-text`, `data-show` and its other attribute plugins — are not allowed. Values must be text.
+
+A node with a disallowed attribute won't save. Imports (JSON files, the console and the Verbb Navigation migration) drop disallowed attributes and keep the rest, and rendering, the REST API and GraphQL skip any that were stored before these checks existed. Values are escaped as always. If your site's front end runs a framework that executes other `data-*` attributes, treat menu editors as trusted.
 
 ---
 
@@ -298,13 +327,12 @@ Disable visibility checks for a render call:
 
 ## Caching
 
-FreeNav caches rendered HTML per menu + site + render options using Craft's cache component with `TagDependency`.
+FreeNav caches rendered HTML per menu, site, page, visitor (logged in or not, and their user groups) and render options, using Laravel's cache with tag dependencies. Pages with a query string are rendered fresh rather than cached.
 
-Cache is **automatically invalidated** when:
+The cache is **automatically invalidated** when:
 - A menu is saved or deleted
-- A node is saved, deleted, or reordered
-- A linked element's title, URL, or status changes
-- Site settings change
+- A node is saved, deleted, or moved in the tree
+- A linked element's title changes (its nodes are re-saved)
 
 ### Configuration
 
@@ -321,15 +349,15 @@ Global defaults in **FreeNav > Settings**. Per-render override:
 ### Clear Cache Manually
 
 ```bash
-php craft free-nav/menus/clear-cache            # All menus
-php craft free-nav/menus/clear-cache mainMenu    # Specific menu
+php artisan free-nav:menus:clear-cache            # All menus
+php artisan free-nav:menus:clear-cache mainMenu    # Specific menu
 ```
 
 ---
 
 ## REST API
 
-Enable/disable in **FreeNav > Settings > Enable REST API**.
+Enable/disable in **FreeNav > Settings > Enable REST API** (on by default).
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -337,7 +365,7 @@ Enable/disable in **FreeNav > Settings > Enable REST API**.
 | `/actions/free-nav/api/get-menu?handle={handle}` | GET | Get a menu with all its nodes |
 | `/actions/free-nav/api/get-breadcrumbs?uri={uri}` | GET | Get breadcrumbs for a URI |
 
-Authenticated via Craft's standard action URL auth (session or token).
+The endpoints are public. They list enabled nodes only and apply each node's visibility rules, so a "logged in only" node is left out for an anonymous caller. Breadcrumb elements are given as `{id, title, url}`.
 
 ---
 
@@ -360,23 +388,26 @@ FreeNav registers per-menu GQL types and scoped read permissions.
             title
             url
         }
+        ... on mainMenu_FreeNavNode {
+            myCustomField
+        }
     }
 }
 ```
 
-Enable per-menu access in **Settings > GraphQL > Schemas** under the **FreeNav** section.
+Enable per-menu access in **Settings > GraphQL > Schemas** under the **FreeNav** section. A query only ever returns nodes from the menus its schema may read. Each menu has its own type, `{menuHandle}_FreeNavNode`, carrying the custom fields of the menu's field layout. Besides `menuHandle`, the queries take `menuId`, `nodeType`, `hasUrl`, `linkedElementId` and Craft's element and structure arguments (`level`, `descendantOf`…).
 
 ---
 
 ## Import / Export
 
 ### Export
-Go to **FreeNav > Menus > [menu] > Build**, click the menu button next to "Add node", and select **Export JSON**.
+Click **Export JSON** in the **FreeNav > Menus** list, or in the save menu of a menu's settings.
 
 ### Import
-Go to **FreeNav > Settings**, choose the file under **Import from JSON**, and click **Import**. If a menu with the file's handle already exists, the import becomes a copy beside it (`mainMenu_imported`, "Main Menu (Imported)") — the existing menu is never touched.
+Go to **FreeNav > Import**, choose the file under **Import from JSON**, and click **Import**. If a menu with the file's handle already exists, the import becomes a copy beside it (`mainMenu_imported`, "Main Menu (Imported)") — the existing menu is never touched.
 
-Element-linked nodes are exported with their element's UID, so they find the same entry, category, asset or product in another environment. A link whose element doesn't exist there imports as a node with no link, and the import tells you which.
+Element-linked nodes are exported with their element's UID, so they find the same entry, asset or product in another environment. A link whose element doesn't exist there imports as a node with no link, and the import tells you which. Files exported by FreeNav 5 import too: category links are looked up as entries, since Craft's conversion of categories to entries keeps their UIDs.
 
 An import is all-or-nothing. Every node is checked first — custom URLs through the same rule the node editor uses, so `javascript:` links and environment variables that don't resolve to an `http(s)` address are refused — along with the menu's node and level limits. If anything fails, nothing is created or changed.
 
@@ -385,16 +416,16 @@ The same export and import run from the command line, for deploy scripts and for
 
 ```bash
 # Export a menu (prints the JSON without --file)
-php craft free-nav/menus/export mainMenu --file=storage/mainMenu.json
+php artisan free-nav:menus:export mainMenu --file=storage/mainMenu.json
 
 # Import: creates the menu when no menu has the file's handle
-php craft free-nav/menus/import --file=storage/mainMenu.json
+php artisan free-nav:menus:import --file=storage/mainMenu.json
 
 # Replace an existing menu's nodes with the file's
-php craft free-nav/menus/import --file=storage/mainMenu.json --replace
+php artisan free-nav:menus:import --file=storage/mainMenu.json --replace
 
 # Import into a different handle, reading the file from stdin
-cat mainMenu.json | php craft free-nav/menus/import footerNav --file=- --replace
+cat mainMenu.json | php artisan free-nav:menus:import footerNav --file=- --replace
 ```
 
 A menu's definition is project config but its nodes are content, so the two cases differ:
@@ -434,57 +465,58 @@ Every failure exits non-zero and changes nothing, so a deploy script can stop on
 
 ```bash
 # List all menus
-php craft free-nav/menus
+php artisan free-nav:menus:index
 
 # Resave all nodes (useful after migrations or bulk changes)
-php craft free-nav/menus/resave-nodes
+php artisan free-nav:menus:resave-nodes
 
 # Resave nodes for a specific menu
-php craft free-nav/menus/resave-nodes mainMenu
+php artisan free-nav:menus:resave-nodes mainMenu
 
 # Clear all FreeNav caches
-php craft free-nav/menus/clear-cache
+php artisan free-nav:menus:clear-cache
 
 # Clear cache for a specific menu
-php craft free-nav/menus/clear-cache mainMenu
+php artisan free-nav:menus:clear-cache mainMenu
 
 # Export a menu as JSON, and import one (see Import / Export)
-php craft free-nav/menus/export mainMenu --file=mainMenu.json
-php craft free-nav/menus/import --file=mainMenu.json --replace
+php artisan free-nav:menus:export mainMenu --file=mainMenu.json
+php artisan free-nav:menus:import --file=mainMenu.json --replace
+
+# Copy Verbb Navigation's navs into FreeNav menus (also under FreeNav > Import)
+php artisan free-nav:migrate:from-navigation
 ```
+
+The FreeNav 5 names still work as aliases — `php craft free-nav/menus/clear-cache`, `php craft free-nav/migrate` and so on.
 
 ---
 
 ## Events
 
-FreeNav fires events for extensibility:
+FreeNav's events are Laravel events in `JustinHoltWeb\FreeNav\Events`. Listen with `Event::listen()` in a service provider's or plugin's `boot()`:
 
-| Event | Constant | Service | Purpose |
-|-------|----------|---------|---------|
-| `beforeSaveMenu` | `EVENT_BEFORE_SAVE_MENU` | `Menus` | Before a menu is saved |
-| `afterSaveMenu` | `EVENT_AFTER_SAVE_MENU` | `Menus` | After a menu is saved |
-| `beforeDeleteMenu` | `EVENT_BEFORE_DELETE_MENU` | `Menus` | Before a menu is deleted |
-| `afterDeleteMenu` | `EVENT_AFTER_DELETE_MENU` | `Menus` | After a menu is deleted |
-| `nodeActive` | `EVENT_NODE_ACTIVE` | `Node` | Override a node's active state |
-| `registerNodeTypes` | `EVENT_REGISTER_NODE_TYPES` | `NodeTypes` | Register additional node types |
-| `registerLinkableElements` | `EVENT_REGISTER_LINKABLE_ELEMENTS` | `NodeTypes` | Register linkable element types |
+| Event | Payload | Purpose |
+|-------|---------|---------|
+| `MenuSaving` | `menu`, `isNew` | Before a menu is saved |
+| `MenuSaved` | `menu`, `isNew` | After a menu is saved |
+| `MenuDeleting` | `menu` | Before a menu is deleted |
+| `MenuDeleted` | `menu` | After a menu and its nodes are deleted |
+| `ResolvingNodeActive` | `node`, `isActive` | Override a node's active state |
+| `RegisterNodeTypes` | `types` | Change the node types offered for new nodes |
+| `RegisterLinkableElements` | `elementTypes` | Change the element types nodes can link to |
 
 ### Example: Override Active State
 
 ```php
-use justinholt\freenav\elements\Node;
-use justinholt\freenav\events\NodeActiveEvent;
+use Illuminate\Support\Facades\Event;
+use JustinHoltWeb\FreeNav\Events\ResolvingNodeActive;
 
-Event::on(
-    Node::class,
-    Node::EVENT_NODE_ACTIVE,
-    function (NodeActiveEvent $event) {
-        // Force a node active based on custom logic
-        if ($event->node->getUrl() === '/special') {
-            $event->isActive = true;
-        }
+Event::listen(ResolvingNodeActive::class, function (ResolvingNodeActive $event) {
+    // Force a node active based on custom logic
+    if ($event->node->getUrl() === '/special') {
+        $event->isActive = true;
     }
-);
+});
 ```
 
 ---
@@ -504,8 +536,8 @@ are project config, so changing them also needs `allowAdminChanges`; plugin sett
 | ↳ `freeNav-deleteNodes:{uid}` | Delete nodes from one menu |
 
 The per-menu permissions stand on their own — they are not nested under the all-menus ones, so you
-can grant one menu without granting every menu. The builder also needs Craft's access to the site
-being edited.
+can grant one menu without granting every menu. Editing nodes also needs Craft's permission to edit the
+site they're on.
 
 ---
 
