@@ -1,6 +1,6 @@
 <?php
 
-namespace justinholt\freenav\assetbundles;
+namespace JustinHoltWeb\FreeNav\AssetBundles;
 
 use craft\web\AssetBundle;
 use craft\web\assets\cp\CpAsset;

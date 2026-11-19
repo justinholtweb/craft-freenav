@@ -1,0 +1,436 @@
+<?php
+
+namespace JustinHoltWeb\FreeNav\Services;
+
+use Craft;
+use craft\db\Query;
+use craft\elements\User;
+use craft\events\ConfigEvent;
+use craft\helpers\StringHelper;
+use craft\models\FieldLayout;
+use craft\models\Structure;
+use JustinHoltWeb\FreeNav\Elements\Node;
+use JustinHoltWeb\FreeNav\Events\MenuEvent;
+use JustinHoltWeb\FreeNav\FreeNav;
+use JustinHoltWeb\FreeNav\Models\Menu;
+use JustinHoltWeb\FreeNav\Models\MenuSiteSettings;
+use JustinHoltWeb\FreeNav\Records\MenuRecord;
+use JustinHoltWeb\FreeNav\Records\MenuSiteRecord;
+use yii\base\Component;
+
+class Menus extends Component
+{
+    public const EVENT_BEFORE_SAVE_MENU = 'beforeSaveMenu';
+    public const EVENT_AFTER_SAVE_MENU = 'afterSaveMenu';
+    public const EVENT_BEFORE_DELETE_MENU = 'beforeDeleteMenu';
+    public const EVENT_AFTER_DELETE_MENU = 'afterDeleteMenu';
+
+    private ?array $_menus = null;
+
+    public function getAllMenus(): array
+    {
+        if ($this->_menus !== null) {
+            return $this->_menus;
+        }
+
+        $rows = (new Query())
+            ->select(['*'])
+            ->from(['{{%freenav_menus}}'])
+            ->where(['dateDeleted' => null])
+            ->orderBy(['sortOrder' => SORT_ASC, 'name' => SORT_ASC])
+            ->all();
+
+        $this->_menus = [];
+        foreach ($rows as $row) {
+            $this->_menus[] = new Menu($row);
+        }
+
+        return $this->_menus;
+    }
+
+    public function getMenuById(int $id): ?Menu
+    {
+        $row = (new Query())
+            ->select(['*'])
+            ->from(['{{%freenav_menus}}'])
+            ->where(['id' => $id, 'dateDeleted' => null])
+            ->one();
+
+        return $row ? new Menu($row) : null;
+    }
+
+    public function getMenuByHandle(string $handle): ?Menu
+    {
+        $row = (new Query())
+            ->select(['*'])
+            ->from(['{{%freenav_menus}}'])
+            ->where(['handle' => $handle, 'dateDeleted' => null])
+            ->one();
+
+        return $row ? new Menu($row) : null;
+    }
+
+    public function getMenuByUid(string $uid): ?Menu
+    {
+        $row = (new Query())
+            ->select(['*'])
+            ->from(['{{%freenav_menus}}'])
+            ->where(['uid' => $uid, 'dateDeleted' => null])
+            ->one();
+
+        return $row ? new Menu($row) : null;
+    }
+
+    /**
+     * The menus the current user can open: ones they manage, and ones whose nodes they can edit
+     * (an "edit nodes" user still needs to reach the builder).
+     */
+    public function getEditableMenus(): array
+    {
+        $user = Craft::$app->getUser()->getIdentity();
+
+        if (!$user) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $this->getAllMenus(),
+            fn(Menu $menu) => $this->canManageMenu($user, $menu) || $this->canEditNodes($user, $menu),
+        ));
+    }
+
+    // Permissions — the one place the documented meanings live:
+    //   freeNav-manageMenus            create, edit and delete menus
+    //   freeNav-manageMenu:{uid}       edit one menu's settings
+    //   freeNav-editNodes(:{uid})      add, edit, move and toggle nodes
+    //   freeNav-deleteNodes(:{uid})    delete nodes
+    // -------------------------------------------------------------------------
+
+    public function canManageMenus(User $user): bool
+    {
+        return $user->admin || $user->can('freeNav-manageMenus');
+    }
+
+    public function canManageMenu(User $user, Menu $menu): bool
+    {
+        return $this->canManageMenus($user) || $user->can('freeNav-manageMenu:' . $menu->uid);
+    }
+
+    public function canEditNodes(User $user, Menu $menu): bool
+    {
+        return $user->admin || $user->can('freeNav-editNodes') || $user->can('freeNav-editNodes:' . $menu->uid);
+    }
+
+    public function canDeleteNodes(User $user, Menu $menu): bool
+    {
+        return $user->admin || $user->can('freeNav-deleteNodes') || $user->can('freeNav-deleteNodes:' . $menu->uid);
+    }
+
+    public function getMenuSiteSettings(int $menuId): array
+    {
+        $rows = (new Query())
+            ->select(['*'])
+            ->from(['{{%freenav_menu_sites}}'])
+            ->where(['menuId' => $menuId])
+            ->all();
+
+        $settings = [];
+        foreach ($rows as $row) {
+            $settings[$row['siteId']] = new MenuSiteSettings($row);
+        }
+
+        return $settings;
+    }
+
+    public function saveMenu(Menu $menu, bool $runValidation = true): bool
+    {
+        $isNew = !$menu->id;
+
+        // Fire before event
+        if ($this->hasEventHandlers(self::EVENT_BEFORE_SAVE_MENU)) {
+            $this->trigger(self::EVENT_BEFORE_SAVE_MENU, new MenuEvent([
+                'menu' => $menu,
+                'isNew' => $isNew,
+            ]));
+        }
+
+        if ($runValidation && !$menu->validate()) {
+            Craft::info('Menu not saved due to validation error.', __METHOD__);
+            return false;
+        }
+
+        // Ensure UID
+        if (!$menu->uid) {
+            $menu->uid = StringHelper::UUID();
+        }
+
+        // Save to project config
+        $configPath = "freeNav.menus.{$menu->uid}";
+        $configData = $menu->getConfig();
+
+        Craft::$app->getProjectConfig()->set($configPath, $configData);
+
+        // Update the menu model with its ID if new
+        if ($isNew) {
+            $record = MenuRecord::findOne(['uid' => $menu->uid]);
+            if ($record) {
+                $menu->id = $record->id;
+            }
+        }
+
+        $this->_menus = null;
+
+        return true;
+    }
+
+    public function handleChangedMenu(ConfigEvent $event): void
+    {
+        $uid = $event->tokenMatches[0];
+        $data = $event->newValue;
+
+        $transaction = Craft::$app->getDb()->beginTransaction();
+
+        try {
+            // Structure
+            $structureUid = $data['structure']['uid'] ?? null;
+            $structure = null;
+
+            if ($structureUid) {
+                $structure = Craft::$app->getStructures()->getStructureByUid($structureUid, true);
+            }
+
+            if (!$structure) {
+                $structure = new Structure();
+                $structure->maxLevels = $data['maxLevels'] ?? null;
+                Craft::$app->getStructures()->saveStructure($structure);
+            } else {
+                $structure->maxLevels = $data['maxLevels'] ?? null;
+                Craft::$app->getStructures()->saveStructure($structure);
+            }
+
+            // Field layout
+            $fieldLayoutId = null;
+            if (!empty($data['fieldLayout'])) {
+                $fieldLayout = FieldLayout::createFromConfig($data['fieldLayout']);
+                $fieldLayout->type = Node::class;
+                Craft::$app->getFields()->saveLayout($fieldLayout);
+                $fieldLayoutId = $fieldLayout->id;
+            }
+
+            // Menu record
+            $record = MenuRecord::findOne(['uid' => $uid]);
+            $isNew = !$record;
+
+            if (!$record) {
+                $record = new MenuRecord();
+            }
+
+            $record->uid = $uid;
+            $record->structureId = $structure->id;
+            $record->fieldLayoutId = $fieldLayoutId;
+            $record->name = $data['name'];
+            $record->handle = $data['handle'];
+            $record->instructions = $data['instructions'] ?? null;
+            $record->propagationMethod = $data['propagationMethod'] ?? 'all';
+            $record->maxNodes = $data['maxNodes'] ?? null;
+            $record->maxLevels = $data['maxLevels'] ?? null;
+            $record->defaultPlacement = $data['defaultPlacement'] ?? 'end';
+            $record->save(false);
+
+            // Site settings
+            MenuSiteRecord::deleteAll(['menuId' => $record->id]);
+
+            if (!empty($data['sites'])) {
+                foreach ($data['sites'] as $siteUid => $siteData) {
+                    $site = Craft::$app->getSites()->getSiteByUid($siteUid);
+                    if ($site) {
+                        $siteRecord = new MenuSiteRecord();
+                        $siteRecord->menuId = $record->id;
+                        $siteRecord->siteId = $site->id;
+                        $siteRecord->enabled = $siteData['enabled'] ?? true;
+                        $siteRecord->save(false);
+                    }
+                }
+            }
+
+            $transaction->commit();
+        } catch (\Throwable $e) {
+            $transaction->rollBack();
+            throw $e;
+        }
+
+        $this->_menus = null;
+
+        // Fire after event
+        $menu = $this->getMenuByUid($uid);
+        if ($menu && $this->hasEventHandlers(self::EVENT_AFTER_SAVE_MENU)) {
+            $this->trigger(self::EVENT_AFTER_SAVE_MENU, new MenuEvent([
+                'menu' => $menu,
+                'isNew' => $isNew,
+            ]));
+        }
+    }
+
+    public function deleteMenu(Menu $menu): bool
+    {
+        // Fire before event
+        if ($this->hasEventHandlers(self::EVENT_BEFORE_DELETE_MENU)) {
+            $this->trigger(self::EVENT_BEFORE_DELETE_MENU, new MenuEvent([
+                'menu' => $menu,
+            ]));
+        }
+
+        // Soft delete nodes
+        $nodes = FreeNav::getInstance()->getNodes()->findNodesInMenu($menu->id)->all();
+        foreach ($nodes as $node) {
+            $node->deletedWithMenu = true;
+            Craft::$app->getElements()->deleteElement($node);
+        }
+
+        // Remove from project config
+        Craft::$app->getProjectConfig()->remove("freeNav.menus.{$menu->uid}");
+
+        $this->_menus = null;
+
+        return true;
+    }
+
+    public function handleDeletedMenu(ConfigEvent $event): void
+    {
+        $uid = $event->tokenMatches[0];
+
+        $record = MenuRecord::findOne(['uid' => $uid]);
+
+        if (!$record) {
+            return;
+        }
+
+        $menu = $this->getMenuById($record->id);
+
+        $transaction = Craft::$app->getDb()->beginTransaction();
+
+        try {
+            // Delete nodes
+            $nodes = FreeNav::getInstance()->getNodes()->findNodesInMenu($record->id)->all();
+            foreach ($nodes as $node) {
+                Craft::$app->getElements()->deleteElement($node, true);
+            }
+
+            // Delete site settings
+            MenuSiteRecord::deleteAll(['menuId' => $record->id]);
+
+            // Delete structure
+            if ($record->structureId) {
+                Craft::$app->getStructures()->deleteStructureById($record->structureId);
+            }
+
+            // Delete field layout
+            if ($record->fieldLayoutId) {
+                Craft::$app->getFields()->deleteLayoutById($record->fieldLayoutId);
+            }
+
+            // Delete menu record
+            $record->delete();
+
+            $transaction->commit();
+        } catch (\Throwable $e) {
+            $transaction->rollBack();
+            throw $e;
+        }
+
+        $this->_menus = null;
+
+        // Fire after event
+        if ($menu && $this->hasEventHandlers(self::EVENT_AFTER_DELETE_MENU)) {
+            $this->trigger(self::EVENT_AFTER_DELETE_MENU, new MenuEvent([
+                'menu' => $menu,
+            ]));
+        }
+    }
+
+    public function reorderMenus(array $ids): bool
+    {
+        $transaction = Craft::$app->getDb()->beginTransaction();
+
+        try {
+            foreach ($ids as $order => $id) {
+                Craft::$app->getDb()->createCommand()
+                    ->update('{{%freenav_menus}}', ['sortOrder' => $order], ['id' => $id])
+                    ->execute();
+            }
+
+            $transaction->commit();
+        } catch (\Throwable $e) {
+            $transaction->rollBack();
+            throw $e;
+        }
+
+        $this->_menus = null;
+
+        return true;
+    }
+
+    public function duplicateMenu(Menu $menu): Menu
+    {
+        $newMenu = new Menu();
+        $newMenu->name = $menu->name . ' Copy';
+        $newMenu->handle = $menu->handle . 'Copy';
+        $newMenu->instructions = $menu->instructions;
+        $newMenu->propagationMethod = $menu->propagationMethod;
+        $newMenu->maxNodes = $menu->maxNodes;
+        $newMenu->maxLevels = $menu->maxLevels;
+        $newMenu->defaultPlacement = $menu->defaultPlacement;
+        $newMenu->setSiteSettings($menu->getSiteSettings());
+
+        $this->saveMenu($newMenu);
+
+        // Duplicate nodes, keeping them nested the same way. The source nodes come back
+        // in structure order, so a level stack is enough to find each one's new parent.
+        $nodes = Node::find()
+            ->menuId($menu->id)
+            ->siteId('*')
+            ->unique()
+            ->status(null)
+            ->orderBy(['lft' => SORT_ASC])
+            ->all();
+
+        $nodesService = FreeNav::getInstance()->getNodes();
+        $stack = []; // [newNode, level]
+
+        foreach ($nodes as $node) {
+            $level = $node->level ?? 1;
+
+            while (!empty($stack) && $stack[count($stack) - 1][1] >= $level) {
+                array_pop($stack);
+            }
+
+            $newNode = new Node();
+            $newNode->menuId = $newMenu->id;
+            $newNode->siteId = $node->siteId;
+            $newNode->title = $node->title;
+            $newNode->nodeType = $node->nodeType;
+            $newNode->linkedElementId = $node->linkedElementId;
+            $newNode->customUrl = $node->customUrl;
+            $newNode->classes = $node->classes;
+            $newNode->urlSuffix = $node->urlSuffix;
+            $newNode->customAttributes = $node->customAttributes;
+            $newNode->data = $node->data;
+            $newNode->newWindow = $node->newWindow;
+            $newNode->icon = $node->icon;
+            $newNode->badge = $node->badge;
+            $newNode->visibilityRules = $node->visibilityRules;
+            $newNode->enabled = $node->enabled;
+
+            if (!Craft::$app->getElements()->saveElement($newNode)) {
+                continue;
+            }
+
+            $parent = !empty($stack) ? $stack[count($stack) - 1][0] : null;
+            $nodesService->placeNode($newMenu, $newNode, $parent);
+
+            $stack[] = [$newNode, $level];
+        }
+
+        return $newMenu;
+    }
+}

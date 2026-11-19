@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace justinholt\freenav\tests\unit;
+namespace JustinHoltWeb\FreeNav\Tests\unit;
 
-use justinholt\freenav\models\VisibilityRule;
+use JustinHoltWeb\FreeNav\Models\VisibilityRule;
 use PHPUnit\Framework\TestCase;
 
 /**

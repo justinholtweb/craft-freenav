@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace justinholt\freenav\tests\unit;
+namespace JustinHoltWeb\FreeNav\Tests\unit;
 
 use craft\elements\Asset;
 use craft\elements\Category;
 use craft\elements\Entry;
-use justinholt\freenav\enums\NodeType;
-use justinholt\freenav\services\NodeTypes;
+use JustinHoltWeb\FreeNav\Enums\NodeType;
+use JustinHoltWeb\FreeNav\Services\NodeTypes;
 use PHPUnit\Framework\TestCase;
 
 /**

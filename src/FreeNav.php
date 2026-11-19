@@ -1,6 +1,6 @@
 <?php
 
-namespace justinholt\freenav;
+namespace JustinHoltWeb\FreeNav;
 
 use Craft;
 use craft\base\Element;
@@ -21,19 +21,19 @@ use craft\services\Gql;
 use craft\services\UserPermissions;
 use craft\web\twig\variables\CraftVariable;
 use craft\web\UrlManager;
-use justinholt\freenav\elements\Node;
-use justinholt\freenav\fields\MenuField;
-use justinholt\freenav\gql\interfaces\NodeInterface;
-use justinholt\freenav\gql\queries\NodeQuery as GqlNodeQuery;
-use justinholt\freenav\models\Settings;
-use justinholt\freenav\services\Breadcrumbs;
-use justinholt\freenav\services\MenuCache;
-use justinholt\freenav\services\Menus;
-use justinholt\freenav\services\MenuTransfer;
-use justinholt\freenav\services\Nodes;
-use justinholt\freenav\services\NodeTypes;
-use justinholt\freenav\services\Renderer;
-use justinholt\freenav\variables\FreeNavVariable;
+use JustinHoltWeb\FreeNav\Elements\Node;
+use JustinHoltWeb\FreeNav\Fields\MenuField;
+use JustinHoltWeb\FreeNav\Gql\Interfaces\NodeInterface;
+use JustinHoltWeb\FreeNav\Gql\Queries\NodeQuery as GqlNodeQuery;
+use JustinHoltWeb\FreeNav\Models\Settings;
+use JustinHoltWeb\FreeNav\Services\Breadcrumbs;
+use JustinHoltWeb\FreeNav\Services\MenuCache;
+use JustinHoltWeb\FreeNav\Services\Menus;
+use JustinHoltWeb\FreeNav\Services\MenuTransfer;
+use JustinHoltWeb\FreeNav\Services\Nodes;
+use JustinHoltWeb\FreeNav\Services\NodeTypes;
+use JustinHoltWeb\FreeNav\Services\Renderer;
+use JustinHoltWeb\FreeNav\Variables\FreeNavVariable;
 use yii\base\Event;
 
 /**
@@ -114,7 +114,7 @@ class FreeNav extends Plugin
         $this->_registerGarbageCollection();
 
         if (Craft::$app->getRequest()->getIsConsoleRequest()) {
-            $this->controllerMap['migrate'] = \justinholt\freenav\console\controllers\MigrateController::class;
+            $this->controllerMap['migrate'] = \JustinHoltWeb\FreeNav\Console\Commands\MigrateController::class;
         }
 
         if (Craft::$app->getRequest()->getIsCpRequest()) {

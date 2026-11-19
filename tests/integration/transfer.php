@@ -24,10 +24,10 @@ use craft\elements\Entry;
 use craft\elements\User;
 use GuzzleHttp\Client;
 use GuzzleHttp\Cookie\CookieJar;
-use justinholt\freenav\elements\Node;
-use justinholt\freenav\FreeNav;
-use justinholt\freenav\models\Menu;
-use justinholt\freenav\models\MenuSiteSettings;
+use JustinHoltWeb\FreeNav\Elements\Node;
+use JustinHoltWeb\FreeNav\FreeNav;
+use JustinHoltWeb\FreeNav\Models\Menu;
+use JustinHoltWeb\FreeNav\Models\MenuSiteSettings;
 
 Craft::$app->getPlugins()->loadPlugins();
 
@@ -69,12 +69,12 @@ register_shutdown_function(function() use ($run, $tmp, &$userIds) {
         require $root . "/bootstrap.php";
         $app = require CRAFT_VENDOR_PATH . "/craftcms/cms/bootstrap/console.php";
         Craft::$app->getPlugins()->loadPlugins();
-        $plugin = justinholt\freenav\FreeNav::getInstance();
+        $plugin = JustinHoltWeb\FreeNav\FreeNav::getInstance();
         foreach ($plugin->getMenus()->getAllMenus() as $menu) {
             if (!str_starts_with($menu->handle, "transfer' . $run . '") && !str_starts_with($menu->handle, "cliMade' . $run . '")) {
                 continue;
             }
-            foreach (justinholt\freenav\elements\Node::find()->menuId($menu->id)->siteId("*")->status(null)->trashed(null)->all() as $node) {
+            foreach (JustinHoltWeb\FreeNav\Elements\Node::find()->menuId($menu->id)->siteId("*")->status(null)->trashed(null)->all() as $node) {
                 Craft::$app->getElements()->deleteElement($node, true);
             }
             $plugin->getMenus()->deleteMenu($menu);

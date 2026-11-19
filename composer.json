@@ -1,69 +1,74 @@
 {
-  "name": "justinholtweb/craft-free-nav",
-  "description": "A free, full-featured navigation menu builder for Craft CMS 5",
-  "type": "craft-plugin",
-  "version": "5.2.0",
-  "keywords": ["craft", "cms", "navigation", "menu", "nav"],
-  "license": "proprietary",
-  "authors": [
-    {
-      "name": "Justin Holt",
-      "homepage": "https://craft-freenav.com"
+    "name": "justinholtweb/craft-free-nav",
+    "description": "A free, full-featured navigation menu builder for Craft CMS 5",
+    "type": "craft-plugin",
+    "version": "6.0.0-beta.1",
+    "keywords": [
+        "craft",
+        "cms",
+        "navigation",
+        "menu",
+        "nav"
+    ],
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "Justin Holt",
+            "homepage": "https://craft-freenav.com"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/justinholtweb/craft-freenav/issues",
+        "source": "https://github.com/justinholtweb/craft-freenav",
+        "docs": "https://craft-freenav.com/docs"
+    },
+    "require": {
+        "php": "^8.5",
+        "craftcms/cms": "^6.0.0-beta.1"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.13",
+        "laravel/pint": "^1.22",
+        "orchestra/testbench": "^11.0",
+        "pestphp/pest": "^5.0",
+        "pestphp/pest-plugin-laravel": "^5.0",
+        "phpstan/phpstan": "^2.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "JustinHoltWeb\\FreeNav\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "JustinHoltWeb\\FreeNav\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "pest",
+        "phpstan": "phpstan analyse --memory-limit=1G",
+        "check-cs": "pint --test",
+        "fix-cs": "pint"
+    },
+    "config": {
+        "allow-plugins": {
+            "craftcms/plugin-installer": true,
+            "pestphp/pest-plugin": true
+        },
+        "platform": {
+            "php": "8.5"
+        },
+        "sort-packages": true
+    },
+    "minimum-stability": "beta",
+    "prefer-stable": true,
+    "extra": {
+        "name": "FreeNav",
+        "handle": "free-nav",
+        "class": "JustinHoltWeb\\FreeNav\\FreeNav",
+        "description": "A free, full-featured navigation menu builder for Craft CMS",
+        "developer": "Justin Holt",
+        "developerUrl": "https://craft-freenav.com",
+        "documentationUrl": "https://craft-freenav.com/docs"
     }
-  ],
-  "support": {
-    "issues": "https://github.com/justinholtweb/craft-freenav/issues",
-    "source": "https://github.com/justinholtweb/craft-freenav",
-    "docs": "https://craft-freenav.com/docs"
-  },
-  "require": {
-    "php": "^8.2",
-    "craftcms/cms": "^5.0.0"
-  },
-  "require-dev": {
-    "craftcms/ecs": "dev-main",
-    "craftcms/phpstan": "dev-main",
-    "craftcms/rector": "dev-main",
-    "phpunit/phpunit": "^10.5",
-    "phpstan/phpstan": "^1.12 || ^2.2"
-  },
-  "autoload": {
-    "psr-4": {
-      "justinholt\\freenav\\": "src/"
-    }
-  },
-  "autoload-dev": {
-    "psr-4": {
-      "justinholt\\freenav\\tests\\": "tests/"
-    }
-  },
-  "scripts": {
-    "phpstan": "phpstan analyse",
-    "ecs": "ecs check",
-    "ecs-fix": "ecs check --fix",
-    "test": "phpunit",
-    "check": [
-      "@phpstan",
-      "@ecs",
-      "@test"
-    ]
-  },
-  "config": {
-    "allow-plugins": {
-      "yiisoft/yii2-composer": true,
-      "craftcms/plugin-installer": true,
-      "php-http/discovery": true
-    }
-  },
-  "minimum-stability": "dev",
-  "prefer-stable": true,
-  "extra": {
-    "name": "FreeNav",
-    "handle": "free-nav",
-    "class": "justinholt\\freenav\\FreeNav",
-    "description": "A free, full-featured navigation menu builder for Craft CMS",
-    "developer": "Justin Holt",
-    "developerUrl": "https://craft-freenav.com",
-    "documentationUrl": "https://craft-freenav.com/docs"
-  }
 }

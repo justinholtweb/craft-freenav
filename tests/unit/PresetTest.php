@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace justinholt\freenav\tests\unit;
+namespace JustinHoltWeb\FreeNav\Tests\unit;
 
-use justinholt\freenav\enums\Preset;
+use JustinHoltWeb\FreeNav\Enums\Preset;
 use PHPUnit\Framework\TestCase;
 
 /**

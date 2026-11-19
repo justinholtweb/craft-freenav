@@ -1,0 +1,151 @@
+<?php
+
+namespace JustinHoltWeb\FreeNav\Elements\Queries;
+
+use craft\elements\db\ElementQuery;
+use craft\helpers\Db;
+use JustinHoltWeb\FreeNav\Elements\Node;
+use JustinHoltWeb\FreeNav\Enums\NodeType;
+use JustinHoltWeb\FreeNav\FreeNav;
+
+/**
+ * @method Node[] all($db = null)
+ * @method Node|null one($db = null)
+ * @method Node|null nth(int $n, ?\yii\db\Connection $db = null)
+ */
+class NodeQuery extends ElementQuery
+{
+    public mixed $menuId = null;
+    public mixed $menuHandle = null;
+    public mixed $nodeType = null;
+    public ?bool $hasUrl = null;
+    public mixed $linkedElementId = null;
+    public ?bool $visibleOnly = null;
+
+    public function menuId(mixed $value): static
+    {
+        $this->menuId = $value;
+        return $this;
+    }
+
+    public function menuHandle(mixed $value): static
+    {
+        $this->menuHandle = $value;
+        return $this;
+    }
+
+    public function nodeType(mixed $value): static
+    {
+        if ($value instanceof NodeType) {
+            $this->nodeType = $value->value;
+        } else {
+            $this->nodeType = $value;
+        }
+        return $this;
+    }
+
+    public function hasUrl(?bool $value = true): static
+    {
+        $this->hasUrl = $value;
+        return $this;
+    }
+
+    public function linkedElementId(mixed $value): static
+    {
+        $this->linkedElementId = $value;
+        return $this;
+    }
+
+    public function visibleOnly(?bool $value = true): static
+    {
+        $this->visibleOnly = $value;
+        return $this;
+    }
+
+    protected function beforePrepare(): bool
+    {
+        $this->joinElementTable('freenav_nodes');
+
+        // Nodes always live in their menu's structure, so join the structure data
+        // even when the query doesn't narrow to a single menu. Without this, a bare
+        // Node::find()->id() comes back with no level/lft/rgt and no way to tell
+        // where the node sits in the menu.
+        $this->withStructure ??= !$this->trashed;
+
+        $this->query->select([
+            'freenav_nodes.menuId',
+            'freenav_nodes.linkedElementId',
+            'freenav_nodes.nodeType',
+            'freenav_nodes.customUrl',
+            'freenav_nodes.classes',
+            'freenav_nodes.urlSuffix',
+            'freenav_nodes.customAttributes',
+            'freenav_nodes.data',
+            'freenav_nodes.newWindow',
+            'freenav_nodes.icon',
+            'freenav_nodes.badge',
+            'freenav_nodes.visibilityRules',
+            'freenav_nodes.deletedWithMenu',
+        ]);
+
+        if ($this->menuId) {
+            $this->subQuery->andWhere(Db::parseParam('freenav_nodes.menuId', $this->menuId));
+
+            // Set structureId so Craft joins structureelements for ordering
+            if (!$this->structureId && is_int($this->menuId)) {
+                $menu = FreeNav::getInstance()->getMenus()->getMenuById($this->menuId);
+                if ($menu?->structureId) {
+                    $this->structureId = $menu->structureId;
+                }
+            }
+        }
+
+        if ($this->menuHandle) {
+            $this->subQuery->innerJoin(
+                '{{%freenav_menus}} freenav_menus',
+                '[[freenav_menus.id]] = [[freenav_nodes.menuId]]'
+            );
+            $this->subQuery->andWhere(Db::parseParam('freenav_menus.handle', $this->menuHandle));
+
+            // Set structureId so Craft joins structureelements for ordering
+            if (!$this->structureId && is_string($this->menuHandle)) {
+                $menu = FreeNav::getInstance()->getMenus()->getMenuByHandle($this->menuHandle);
+                if ($menu?->structureId) {
+                    $this->structureId = $menu->structureId;
+                }
+            }
+        }
+
+        if ($this->nodeType) {
+            $this->subQuery->andWhere(Db::parseParam('freenav_nodes.nodeType', $this->nodeType));
+        }
+
+        if ($this->hasUrl !== null) {
+            if ($this->hasUrl) {
+                $this->subQuery->andWhere(['not', ['freenav_nodes.nodeType' => 'passive']]);
+            } else {
+                $this->subQuery->andWhere(['freenav_nodes.nodeType' => 'passive']);
+            }
+        }
+
+        if ($this->linkedElementId) {
+            $this->subQuery->andWhere(Db::parseParam('freenav_nodes.linkedElementId', $this->linkedElementId));
+        }
+
+        return parent::beforePrepare();
+    }
+
+    protected function afterPrepare(): bool
+    {
+        return parent::afterPrepare();
+    }
+
+    /**
+     * @inheritdoc
+     * @return Node
+     */
+    public function createElement(array $row): Node
+    {
+        return new Node($row);
+    }
+}

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace justinholt\freenav\tests\unit;
+namespace JustinHoltWeb\FreeNav\Tests\unit;
 
-use justinholt\freenav\enums\Propagation;
+use JustinHoltWeb\FreeNav\Enums\Propagation;
 use PHPUnit\Framework\TestCase;
 
 final class PropagationTest extends TestCase

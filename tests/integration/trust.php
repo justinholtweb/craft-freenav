@@ -22,10 +22,10 @@ $app = require CRAFT_VENDOR_PATH . '/craftcms/cms/bootstrap/console.php';
 use craft\elements\User;
 use GuzzleHttp\Client;
 use GuzzleHttp\Cookie\CookieJar;
-use justinholt\freenav\elements\Node;
-use justinholt\freenav\FreeNav;
-use justinholt\freenav\models\Menu;
-use justinholt\freenav\models\MenuSiteSettings;
+use JustinHoltWeb\FreeNav\Elements\Node;
+use JustinHoltWeb\FreeNav\FreeNav;
+use JustinHoltWeb\FreeNav\Models\Menu;
+use JustinHoltWeb\FreeNav\Models\MenuSiteSettings;
 
 Craft::$app->getPlugins()->loadPlugins();
 
