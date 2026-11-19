@@ -278,7 +278,7 @@ class MenuTransfer extends Component
             $node->customUrl = $this->_string($item['customUrl'] ?? $item['url'] ?? null);
             $node->classes = $this->_string($item['classes'] ?? null);
             $node->urlSuffix = $this->_string($item['urlSuffix'] ?? null);
-            $node->customAttributes = $this->_array($item['customAttributes'] ?? null);
+            $node->customAttributes = Node::safeCustomAttributes($this->_array($item['customAttributes'] ?? null));
             $node->data = $this->_array($item['data'] ?? null);
             $node->visibilityRules = $this->_array($item['visibilityRules'] ?? null);
             $node->newWindow = (bool)($item['newWindow'] ?? false);

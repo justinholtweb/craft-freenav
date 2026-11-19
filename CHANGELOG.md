@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.2.1 - Unreleased
+### Security
+
+- **Custom attributes could carry script onto the front end.** A node's custom attribute names were written onto its link unchecked, so anyone who could edit a menu, or a menu file imported from elsewhere, could add an event handler such as `onmouseover` or a `href`/`style` override to every page that renders the menu. Event handlers (`on…`), URL-carrying attributes (`href`, `src`, `srcset`, `srcdoc`, `action`, `formaction`, `xlink:href` and similar) and `style` are now refused when a node is saved, dropped from imports (control panel, console and Verbb Navigation), and skipped when a menu renders, which also covers menus saved before this release. `data-*`, `aria-*`, `title`, `rel`, `id` and other well-formed attribute names still work.
+
 ## 5.2.0 - 2026-10-09
 ### Added
 

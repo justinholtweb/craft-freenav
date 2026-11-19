@@ -4,7 +4,9 @@ namespace justinholt\freenav\controllers;
 
 use Craft;
 use craft\db\Query;
+use craft\helpers\Json;
 use craft\web\Controller;
+use justinholt\freenav\elements\Node;
 use justinholt\freenav\FreeNav;
 use justinholt\freenav\models\Menu;
 use justinholt\freenav\models\MenuSiteSettings;
@@ -240,7 +242,7 @@ class ImportExportController extends Controller
                 'linkedElementId' => $this->_resolveVerbbElementId($navNode),
                 'classes' => $navNode['classes'] ?? null,
                 'urlSuffix' => $navNode['urlSuffix'] ?? null,
-                'customAttributes' => $navNode['customAttributes'] ?? null,
+                'customAttributes' => Node::safeCustomAttributes(is_string($navNode['customAttributes'] ?? null) ? (Json::decodeIfJson($navNode['customAttributes']) ?: null) : ($navNode['customAttributes'] ?? null)),
                 'data' => $navNode['data'] ?? null,
                 'newWindow' => (bool)($navNode['newWindow'] ?? false),
                 'enabled' => true,

@@ -375,10 +375,11 @@ class Node extends Element
             $attrs['rel'] = 'noopener noreferrer';
         }
 
-        // Custom attributes
+        // Custom attributes. Unsafe names are skipped here as well as refused on save, so a menu
+        // saved before 5.2.1 (or written straight to the database) can't put script on the page.
         $customAttrs = $this->getCustomAttributesArray();
         foreach ($customAttrs as $attr) {
-            if (!empty($attr['key'])) {
+            if (!empty($attr['key']) && self::isSafeAttributeName((string)$attr['key'])) {
                 $attrs[$attr['key']] = $attr['value'] ?? '';
             }
         }
@@ -650,8 +651,61 @@ class Node extends Element
                 $this->addError($attribute, Craft::t('free-nav', 'Use a web address, a path, an anchor, or a mailto:, tel: or sms: link. Environment variables and aliases must resolve to an http(s) address.'));
             }
         }, 'skipOnEmpty' => true];
+        $rules[] = [['customAttributes'], function(string $attribute) {
+            foreach ($this->getCustomAttributesArray() as $attr) {
+                $key = trim((string)($attr['key'] ?? ''));
+                if ($key !== '' && !self::isSafeAttributeName($key)) {
+                    $this->addError($attribute, Craft::t('free-nav', '“{key}” can’t be used as a custom attribute. Event handlers (on…), URL attributes such as href and src, and style aren’t allowed.', ['key' => $key]));
+                }
+            }
+        }, 'skipOnEmpty' => true];
 
         return $rules;
+    }
+
+    /**
+     * Attribute names a custom attribute may use on a front-end link.
+     *
+     * Custom attributes are written by anyone who can edit a menu, and land on every page that
+     * renders it. An event handler (`onmouseover`), a URL-bearing attribute (`href`, `src`,
+     * `formaction`…) or `style` would let that person run script or restyle the page for every
+     * visitor, so they are refused. Everything else that is a well-formed attribute name —
+     * `data-*`, `aria-*`, `title`, `rel`, `id`, `lang`, `itemprop` — is allowed.
+     */
+    public static function isSafeAttributeName(string $name): bool
+    {
+        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_.:-]*$/', $name)) {
+            return false;
+        }
+
+        $lower = strtolower($name);
+
+        if (str_starts_with($lower, 'on')) {
+            return false;
+        }
+
+        return !in_array($lower, [
+            'href', 'src', 'srcset', 'srcdoc', 'action', 'formaction', 'style', 'xlink:href',
+            'xmlns', 'background', 'poster', 'lowsrc', 'dynsrc', 'ping', 'data', 'code', 'codebase',
+            'manifest', 'is',
+        ], true);
+    }
+
+    /**
+     * Drops custom attributes with unsafe names. For imports, where one bad attribute shouldn't
+     * stop the whole node, or menu, from coming across.
+     *
+     * @param array|null $attributes
+     * @return array|null
+     */
+    public static function safeCustomAttributes(?array $attributes): ?array
+    {
+        if ($attributes === null) {
+            return null;
+        }
+
+        return array_values(array_filter($attributes, fn($attr) => is_array($attr)
+            && self::isSafeAttributeName(trim((string)($attr['key'] ?? '')))));
     }
 
     public function canView(\craft\elements\User $user): bool
