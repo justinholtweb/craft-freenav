@@ -3,7 +3,7 @@
 ## 5.2.1 - Unreleased
 ### Security
 
-- **Custom attributes could carry script onto the front end.** A node's custom attribute names were written onto its link unchecked, so anyone who could edit a menu, or a menu file imported from elsewhere, could add an event handler such as `onmouseover` or a `href`/`style` override to every page that renders the menu. Event handlers (`on…`), URL-carrying attributes (`href`, `src`, `srcset`, `srcdoc`, `action`, `formaction`, `xlink:href` and similar) and `style` are now refused when a node is saved, dropped from imports (control panel, console and Verbb Navigation), and skipped when a menu renders, which also covers menus saved before this release. `data-*`, `aria-*`, `title`, `rel`, `id` and other well-formed attribute names still work.
+- **Custom attributes could carry script onto the front end.** A node's custom attributes were written onto its link unchecked, so anyone who could edit a menu, or a menu file imported from elsewhere, could add an event handler such as `onmouseover`, a `href` or `style` override, a front-end framework directive that runs code (`x-init`, `hx-get`, `v-html`, `ng-click`…), or an array value that expanded into further attributes. Custom attribute names are now an allowlist — `data-*` (except framework directives such as `data-hx-*` and `data-on-*`), `aria-*`, and plain attributes like `title`, `rel`, `id`, `lang`, `role` and `itemprop` — and values must be text. Anything else is refused when a node is saved, dropped from imports (control panel, console and Verbb Navigation), and skipped when a menu renders, which also covers menus saved before this release.
 
 ## 5.2.0 - 2026-10-09
 ### Added

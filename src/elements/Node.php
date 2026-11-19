@@ -379,8 +379,14 @@ class Node extends Element
         // saved before 5.2.1 (or written straight to the database) can't put script on the page.
         $customAttrs = $this->getCustomAttributesArray();
         foreach ($customAttrs as $attr) {
-            if (!empty($attr['key']) && self::isSafeAttributeName((string)$attr['key'])) {
-                $attrs[$attr['key']] = $attr['value'] ?? '';
+            if (!is_array($attr) || empty($attr['key']) || !self::isSafeAttributeName((string)$attr['key'])) {
+                continue;
+            }
+
+            $value = self::customAttributeValue($attr['value'] ?? null);
+
+            if ($value !== null) {
+                $attrs[$attr['key']] = $value;
             }
         }
 
@@ -653,9 +659,11 @@ class Node extends Element
         }, 'skipOnEmpty' => true];
         $rules[] = [['customAttributes'], function(string $attribute) {
             foreach ($this->getCustomAttributesArray() as $attr) {
-                $key = trim((string)($attr['key'] ?? ''));
+                $key = trim((string)(is_array($attr) ? ($attr['key'] ?? '') : ''));
                 if ($key !== '' && !self::isSafeAttributeName($key)) {
-                    $this->addError($attribute, Craft::t('free-nav', '“{key}” can’t be used as a custom attribute. Event handlers (on…), URL attributes such as href and src, and style aren’t allowed.', ['key' => $key]));
+                    $this->addError($attribute, Craft::t('free-nav', '“{key}” can’t be used as a custom attribute. Use data-*, aria-*, title, rel, id, lang, role or another plain attribute; event handlers, URL attributes, style and framework directives such as x-* or hx-* aren’t allowed.', ['key' => $key]));
+                } elseif ($key !== '' && self::customAttributeValue($attr['value'] ?? null) === null) {
+                    $this->addError($attribute, Craft::t('free-nav', 'The value of “{key}” must be text.', ['key' => $key]));
                 }
             }
         }, 'skipOnEmpty' => true];
@@ -667,37 +675,48 @@ class Node extends Element
      * Attribute names a custom attribute may use on a front-end link.
      *
      * Custom attributes are written by anyone who can edit a menu, and land on every page that
-     * renders it. An event handler (`onmouseover`), a URL-bearing attribute (`href`, `src`,
-     * `formaction`…) or `style` would let that person run script or restyle the page for every
-     * visitor, so they are refused. Everything else that is a well-formed attribute name —
-     * `data-*`, `aria-*`, `title`, `rel`, `id`, `lang`, `itemprop` — is allowed.
+     * renders it, so this is an allowlist: `aria-*`, `data-*`, and a handful of plain attributes
+     * (`title`, `rel`, `id`, `lang`, `role`, `itemprop`…). Event handlers, URL attributes and
+     * `style` are not on it, and neither are front-end framework directives that run code from
+     * an attribute's value: Alpine (`x-*`), htmx (`hx-*`, `data-hx-*`), Vue (`v-*`), Angular
+     * (`ng-*`, `data-ng-*`) and Datastar's script-running `data-*` attributes.
      */
     public static function isSafeAttributeName(string $name): bool
     {
-        if (!preg_match('/^[a-zA-Z_][a-zA-Z0-9_.:-]*$/', $name)) {
-            return false;
-        }
-
         $lower = strtolower($name);
 
-        if (str_starts_with($lower, 'on')) {
+        if (in_array($lower, [
+            'title', 'rel', 'id', 'lang', 'dir', 'role', 'tabindex', 'accesskey', 'translate',
+            'hreflang', 'download', 'type', 'itemprop', 'itemscope', 'itemtype', 'itemid', 'referrerpolicy',
+        ], true)) {
+            return true;
+        }
+
+        if (preg_match('/^aria-[a-z]+$/', $lower)) {
+            return true;
+        }
+
+        if (!preg_match('/^data-[a-z0-9][a-z0-9_-]*$/', $lower)) {
             return false;
         }
 
-        return !in_array($lower, [
-            'href', 'src', 'srcset', 'srcdoc', 'action', 'formaction', 'style', 'xlink:href',
-            'xmlns', 'background', 'poster', 'lowsrc', 'dynsrc', 'ping', 'data', 'code', 'codebase',
-            'manifest', 'is',
-        ], true);
+        // data-* attributes that frameworks evaluate as code.
+        return !preg_match('/^data-(hx-|ng-|x-|v-|on|bind|attr|signals|effect|computed|init|ref|indicator|persist)/', $lower);
     }
 
     /**
-     * Drops custom attributes with unsafe names. For imports, where one bad attribute shouldn't
-     * stop the whole node, or menu, from coming across.
-     *
-     * @param array|null $attributes
-     * @return array|null
+     * A custom attribute's value as a string, or null when it isn't a scalar. Craft's HTML helper
+     * expands an array value into sub-attributes whose names are never checked.
      */
+    public static function customAttributeValue(mixed $value): ?string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        return is_scalar($value) ? (string)$value : null;
+    }
+
     public static function safeCustomAttributes(?array $attributes): ?array
     {
         if ($attributes === null) {
@@ -705,7 +724,8 @@ class Node extends Element
         }
 
         return array_values(array_filter($attributes, fn($attr) => is_array($attr)
-            && self::isSafeAttributeName(trim((string)($attr['key'] ?? '')))));
+            && self::isSafeAttributeName(trim((string)($attr['key'] ?? '')))
+            && self::customAttributeValue($attr['value'] ?? null) !== null));
     }
 
     public function canView(\craft\elements\User $user): bool
