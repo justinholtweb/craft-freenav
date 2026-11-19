@@ -360,11 +360,11 @@ class MenuTransfer
                 $result->errors[] = t('Node {path} has no title.', ['path' => $label], category: 'free-nav');
             }
 
-            if (! $node->validate(['customUrl'])) {
+            if (! $node->validate(['customUrl', 'urlSuffix'])) {
                 $result->errors[] = t('Node {path} (“{title}”): {error}', [
                     'path' => $label,
                     'title' => $node->title,
-                    'error' => $node->errors()->first('customUrl'),
+                    'error' => $node->errors()->first('customUrl') ?: $node->errors()->first('urlSuffix'),
                 ], category: 'free-nav');
             }
 
