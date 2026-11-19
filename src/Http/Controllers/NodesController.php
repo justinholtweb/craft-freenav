@@ -35,6 +35,7 @@ use JustinHoltWeb\FreeNav\Services\NodeTypes;
 use Symfony\Component\HttpFoundation\Response;
 
 use function CraftCms\Cms\cp_url;
+use function CraftCms\Cms\currentUser;
 use function CraftCms\Cms\currentUserElement;
 use function CraftCms\Cms\t;
 
@@ -164,8 +165,10 @@ class NodesController
             'siteId' => $request->integer('siteId') ?: null,
         ]);
 
-        if ($linkedElementId && ! Elements::getElementById($linkedElementId, (string) $type->elementType(), $node->siteId)) {
-            return $this->failure($request, $menu, $values, ['linkedElementIds.'.$type->value => [t('That element doesn’t exist on this site.', category: 'free-nav')]]);
+        // Only an element of the node type's class that this user may view: posting an ID is
+        // otherwise a way to link to, and copy the title of, a hidden entry.
+        if ($linkedElementId && ! $this->nodes->linkableElement($type, $linkedElementId, (int) $node->siteId, currentUser())) {
+            return $this->failure($request, $menu, $values, ['linkedElementIds.'.$type->value => [t('That element doesn’t exist on this site, or you can’t view it.', category: 'free-nav')]]);
         }
 
         try {

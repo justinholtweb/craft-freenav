@@ -217,6 +217,7 @@ class Node extends Element
                 'structureId' => $menu->structureId,
                 'structureEditable' => $canEdit,
                 'defaultSort' => ['structure', 'asc'],
+                'defaultViewMode' => 'structure',
             ];
         }
 
@@ -296,6 +297,13 @@ class Node extends Element
 
         if ($this->urlSuffix) {
             $baseUrl .= $this->urlSuffix;
+
+            // Checked again with the suffix on: a relative custom URL such as `java` plus a suffix
+            // of `script:…` would otherwise make a `javascript:` link. This also covers suffixes
+            // saved before the suffix rule existed.
+            if (! self::hasSafeScheme($baseUrl)) {
+                return null;
+            }
         }
 
         return $baseUrl;
@@ -870,15 +878,24 @@ class Node extends Element
             return $resolved;
         }
 
+        return self::hasSafeScheme($url) ? $url : null;
+    }
+
+    /**
+     * Whether a link's scheme, if it has one, is one that can't run anything: http(s), mailto,
+     * tel or sms. A relative link has none and passes.
+     */
+    public static function hasSafeScheme(string $url): bool
+    {
         // Browsers ignore whitespace and control characters inside a scheme, so `java\tscript:`
         // is still JavaScript.
         $compact = preg_replace('/[\x00-\x20]+/', '', $url) ?? '';
 
         if (preg_match('/^([a-z][a-z0-9+.-]*):/i', $compact, $m)) {
-            return in_array(strtolower($m[1]), ['http', 'https', 'mailto', 'tel', 'sms'], true) ? $url : null;
+            return in_array(strtolower($m[1]), ['http', 'https', 'mailto', 'tel', 'sms'], true);
         }
 
-        return $url;
+        return true;
     }
 
     /**

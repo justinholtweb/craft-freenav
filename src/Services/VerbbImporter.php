@@ -6,9 +6,11 @@ namespace JustinHoltWeb\FreeNav\Services;
 
 use CraftCms\Cms\Database\Table;
 use CraftCms\Cms\Support\Json;
+use CraftCms\Cms\User\Contracts\CraftUser;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use JustinHoltWeb\FreeNav\Elements\Node;
+use JustinHoltWeb\FreeNav\Enums\NodeType;
 use JustinHoltWeb\FreeNav\Models\Menu;
 use JustinHoltWeb\FreeNav\Models\MenuSiteSettings;
 
@@ -64,7 +66,7 @@ class VerbbImporter
      * @param  array<string, mixed>  $nav
      * @return array{menu: Menu, nodes: int}|null
      */
-    public function migrateNav(array $nav): ?array
+    public function migrateNav(array $nav, ?CraftUser $user = null): ?array
     {
         if ($this->menus->getMenuByHandle((string) $nav['handle'])) {
             return null;
@@ -98,13 +100,13 @@ class VerbbImporter
 
         $menu = $this->menus->getMenuById((int) $menu->id) ?? $menu;
 
-        return ['menu' => $menu, 'nodes' => $this->migrateNodes($nav, $menu)];
+        return ['menu' => $menu, 'nodes' => $this->migrateNodes($nav, $menu, $user)];
     }
 
     /**
      * @param  array<string, mixed>  $nav
      */
-    private function migrateNodes(array $nav, Menu $menu): int
+    private function migrateNodes(array $nav, Menu $menu, ?CraftUser $user): int
     {
         $rows = DB::table('navigation_nodes as n')
             ->select([
@@ -133,11 +135,21 @@ class VerbbImporter
 
             $attributes = is_string($row->customAttributes) ? Json::decodeIfJson($row->customAttributes) : $row->customAttributes;
 
+            $nodeType = self::mapType($row->type);
+            $type = NodeType::from($nodeType);
+            $elementId = $this->existingElementId($row->elementId ?? null);
+
+            // Only an element of the node type's class, and in the control panel one the user
+            // may view (the console migration has no user).
+            if ($elementId !== null && ! $this->nodes->linkableElement($type, $elementId, $this->nodes->getDefaultSiteId($menu), $user)) {
+                $elementId = null;
+            }
+
             $created = $this->nodes->addNodes($menu, [[
                 'title' => (string) ($row->title ?? ''),
-                'nodeType' => self::mapType($row->type),
+                'nodeType' => $nodeType,
                 'customUrl' => $row->url ?? null,
-                'linkedElementId' => $this->existingElementId($row->elementId ?? null),
+                'linkedElementId' => $elementId,
                 'classes' => $row->classes ?? null,
                 'urlSuffix' => $row->urlSuffix ?? null,
                 'customAttributes' => Node::safeCustomAttributes(is_array($attributes) ? $attributes : null),

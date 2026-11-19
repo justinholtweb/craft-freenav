@@ -14,6 +14,7 @@ use JustinHoltWeb\FreeNav\Services\VerbbImporter;
 use Symfony\Component\HttpFoundation\Response;
 
 use function CraftCms\Cms\cp_url;
+use function CraftCms\Cms\currentUser;
 use function CraftCms\Cms\currentUserElement;
 use function CraftCms\Cms\t;
 
@@ -77,7 +78,7 @@ class ImportExportController
         }
 
         // A menu with the same handle is left alone; the import becomes a copy beside it.
-        $result = $this->transfer->importMenu($data, renameOnConflict: true);
+        $result = $this->transfer->importMenu($data, renameOnConflict: true, user: currentUser());
 
         if (! $result->getSuccess() || ! $result->menu) {
             return $this->asFailure(implode(' ', $result->errors));
@@ -110,7 +111,7 @@ class ImportExportController
         $skipped = 0;
 
         foreach ($navs as $nav) {
-            $this->verbb->migrateNav($nav) ? $migrated++ : $skipped++;
+            $this->verbb->migrateNav($nav, currentUser()) ? $migrated++ : $skipped++;
         }
 
         $message = t('{count} navigation(s) migrated.', ['count' => $migrated], category: 'free-nav');

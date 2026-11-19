@@ -34,7 +34,7 @@ class NodeRules extends ElementRules
             'nodeType' => ['required', 'string'],
             'customUrl' => ['nullable', 'string', $this->customUrlRule(...)],
             'classes' => ['nullable', 'string', 'max:255'],
-            'urlSuffix' => ['nullable', 'string', 'max:255'],
+            'urlSuffix' => ['nullable', 'string', 'max:255', $this->urlSuffixRule(...)],
             'icon' => ['nullable', 'string', 'max:255'],
             'badge' => ['nullable', 'string', 'max:100'],
             'newWindow' => ['boolean'],
@@ -52,6 +52,16 @@ class NodeRules extends ElementRules
             && Node::resolveCustomUrl($value) === null
         ) {
             $fail(t('Use a web address, a path, an anchor, or a mailto:, tel: or sms: link. Environment variables and aliases must resolve to an http(s) address.', category: 'free-nav'));
+        }
+    }
+
+    /**
+     * The suffix is appended to the URL, so it may only continue it — never start a scheme.
+     */
+    private function urlSuffixRule(string $attribute, mixed $value, Closure $fail): void
+    {
+        if (is_string($value) && $value !== '' && ! preg_match('~^[?#&/]~', $value)) {
+            $fail(t('A URL suffix starts with #, ?, & or /.', category: 'free-nav'));
         }
     }
 

@@ -7,6 +7,7 @@ namespace JustinHoltWeb\FreeNav\Services;
 use CraftCms\Cms\Element\Contracts\ElementInterface;
 use CraftCms\Cms\Support\Facades\Elements;
 use CraftCms\Cms\Support\Json;
+use CraftCms\Cms\User\Contracts\CraftUser;
 use Illuminate\Support\Facades\DB;
 use JustinHoltWeb\FreeNav\Elements\Node;
 use JustinHoltWeb\FreeNav\Enums\NodeType;
@@ -45,6 +46,9 @@ class MenuTransfer
         'craft\\elements\\Asset' => NodeType::Asset,
         'craft\\commerce\\elements\\Product' => NodeType::Product,
     ];
+
+    /** Whose access decides which linked elements an import may keep. */
+    private ?CraftUser $user = null;
 
     public function __construct(
         private readonly Menus $menus,
@@ -114,10 +118,16 @@ class MenuTransfer
      * node editor uses — and the node writes run in one transaction, so a bad file changes nothing.
      * Custom attributes with unsafe names or non-text values are dropped.
      *
+     * With `$user` (a control panel import), element links are only kept to elements that user
+     * may view. The console has no user, and its imports trust the file the way a deploy script
+     * is trusted.
+     *
      * @param  array<string, mixed>  $data
      */
-    public function importMenu(array $data, ?string $handle = null, bool $replace = false, bool $renameOnConflict = false): ImportResult
+    public function importMenu(array $data, ?string $handle = null, bool $replace = false, bool $renameOnConflict = false, ?CraftUser $user = null): ImportResult
     {
+        $this->user = $user;
+
         $result = new ImportResult;
         $menuData = $data['menu'];
         $handle = $handle ?: (string) $menuData['handle'];
@@ -339,7 +349,7 @@ class MenuTransfer
                     $node->title = (string) ($element->title ?? '');
                 }
             } elseif ($type->isElement()) {
-                $result->warnings[] = t('Node {path} (“{title}”) links to a {type} that doesn’t exist here; it will have no link until one is chosen.', [
+                $result->warnings[] = t('Node {path} (“{title}”) links to a {type} that doesn’t exist here or that you can’t view; it will have no link until one is chosen.', [
                     'path' => $label,
                     'title' => $node->title,
                     'type' => strtolower($type->label()),
@@ -389,7 +399,13 @@ class MenuTransfer
             return null;
         }
 
-        return $elementType::find()->uid($uid)->status(null)->site('*')->unique()->one();
+        $element = $elementType::find()->uid($uid)->status(null)->site('*')->unique()->one();
+
+        if ($element && $this->user && ! $this->user->can('view', $element)) {
+            return null;
+        }
+
+        return $element;
     }
 
     /**

@@ -38,3 +38,33 @@ it('refuses environment values that are not one http(s) variable', function () {
         ->and(Node::resolveCustomUrl('$PRIMARY_SITE_URL/x?k=$APP_KEY'))->toBeNull()
         ->and(Node::resolveCustomUrl('@web/$APP_KEY'))->toBeNull();
 });
+
+/**
+ * A node without a container for the bits of getUrl() that would need one.
+ */
+function customNode(?string $customUrl, ?string $urlSuffix): Node
+{
+    $node = new class extends Node
+    {
+        public function __construct() {}
+    };
+    $node->nodeType = 'custom';
+    $node->customUrl = $customUrl;
+    $node->urlSuffix = $urlSuffix;
+
+    return $node;
+}
+
+it('checks the link again once the suffix is added', function () {
+    expect(customNode('java', 'script:alert(1)')->getUrl())->toBeNull()
+        ->and(customNode('/about', '#team')->getUrl())->toBe('/about#team')
+        ->and(customNode('https://example.com', '?ref=nav')->getUrl())->toBe('https://example.com?ref=nav')
+        ->and(customNode('/about', null)->getUrl())->toBe('/about');
+});
+
+it('knows which schemes are safe', function () {
+    expect(Node::hasSafeScheme('javascript:alert(1)'))->toBeFalse()
+        ->and(Node::hasSafeScheme("java\tscript:x"))->toBeFalse()
+        ->and(Node::hasSafeScheme('/about#team'))->toBeTrue()
+        ->and(Node::hasSafeScheme('mailto:a@b.c'))->toBeTrue();
+});

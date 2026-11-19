@@ -11,6 +11,7 @@ use CraftCms\Cms\Structure\Enums\Mode;
 use CraftCms\Cms\Support\Facades\Elements;
 use CraftCms\Cms\Support\Facades\Sites;
 use CraftCms\Cms\Support\Facades\Structures;
+use CraftCms\Cms\User\Contracts\CraftUser;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use JustinHoltWeb\FreeNav\Elements\Node;
@@ -252,6 +253,29 @@ class Nodes
         }
 
         return $node;
+    }
+
+    /**
+     * The element a node of `$type` may link to: only an element of that type's class, on the
+     * node's site, enabled or not — and, when `$user` is given, only one that user may view, so a
+     * menu editor can't link to (and copy the title of) an entry or asset they can't see by
+     * posting its ID.
+     */
+    public function linkableElement(NodeType $type, int $elementId, int $siteId, ?CraftUser $user): ?ElementInterface
+    {
+        $elementType = $type->elementType();
+
+        if (! $elementType || $elementId <= 0) {
+            return null;
+        }
+
+        $element = $elementType::find()->id($elementId)->siteId($siteId)->status(null)->one();
+
+        if (! $element instanceof ElementInterface) {
+            return null;
+        }
+
+        return $user === null || $user->can('view', $element) ? $element : null;
     }
 
     /**
