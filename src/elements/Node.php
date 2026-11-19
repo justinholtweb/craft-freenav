@@ -703,7 +703,7 @@ class Node extends Element
         // data-* attributes that front-end frameworks evaluate as code: htmx and Angular's data-
         // forms, and Datastar's attribute plugins. A site running some other framework that
         // executes data-* attributes should treat menu editors as trusted.
-        return !preg_match('/^data-(hx-|ng-|x-|v-|on|bind|attr|signals|json-signals|effect|computed|init|ref|indicator|persist|text|show|class|style|model|ignore|scroll-into-view|view-transition|replace-url|query-string|custom-validity|preserve-attr)/', $lower);
+        return !preg_match('/^data-(hx-|ng-|x-|v-|on|bind|attr|signals|json-signals|effect|computed|init|ref|indicator|persist|text|show|class|style|model|ignore|scroll-into-view|view-transition|replace-url|query-string|custom-validity|preserve-attr|star-|animate|match-media|store|intersects|teleport)/', $lower);
     }
 
     /**
