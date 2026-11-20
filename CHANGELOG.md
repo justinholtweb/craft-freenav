@@ -1,5 +1,11 @@
 # Changelog
 
+## 6.0.0-beta.2 - 2026-11-20
+
+### Changed
+
+- The changelog is now shared between the Craft 5 and Craft 6 branches, so each lists both release lines.
+
 ## 6.0.0-beta.1 - 2026-11-19
 
 FreeNav 6 is a native Craft 6 plugin: it runs on Laravel, with no dependency on the Yii 2 adapter. Menus, nodes, templates, the REST API and GraphQL carry over; see [UPGRADING.md](UPGRADING.md).
@@ -44,6 +50,12 @@ FreeNav 6 is a native Craft 6 plugin: it runs on Laravel, with no dependency on 
 - Ships every 5.2.1 fix: the custom attribute allowlist (refused on save, dropped on import, skipped on render, in the REST API and in GraphQL), linked elements the editor must be able to view, and the URL suffix check. On a site whose front end runs a framework that executes other `data-*` attributes, treat menu editors as trusted.
 - The node editor only sets node settings. A crafted save request can't move a node into another menu or change its type or linked element.
 - A custom URL may name one environment variable or alias (`$PRIMARY_SITE_URL/about`, `@web/about`). Craft 6 expands `${VAR}` anywhere in a string, which would have let a URL carry a secret in its query string, so nested variables are refused.
+
+## 5.2.2 - 2026-11-20
+
+### Changed
+
+- The changelog is now shared between the Craft 5 and Craft 6 branches, so each lists both release lines.
 
 ## 5.2.1 - 2026-11-19
 ### Security
