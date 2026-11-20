@@ -1,6 +1,6 @@
 # Changelog
 
-## 6.0.0-beta.1 - Unreleased
+## 6.0.0-beta.1 - 2026-11-19
 
 FreeNav 6 is a native Craft 6 plugin: it runs on Laravel, with no dependency on the Yii 2 adapter. Menus, nodes, templates, the REST API and GraphQL carry over; see [UPGRADING.md](UPGRADING.md).
 
@@ -45,7 +45,7 @@ FreeNav 6 is a native Craft 6 plugin: it runs on Laravel, with no dependency on 
 - The node editor only sets node settings. A crafted save request can't move a node into another menu or change its type or linked element.
 - A custom URL may name one environment variable or alias (`$PRIMARY_SITE_URL/about`, `@web/about`). Craft 6 expands `${VAR}` anywhere in a string, which would have let a URL carry a secret in its query string, so nested variables are refused.
 
-## 5.2.1 - Unreleased
+## 5.2.1 - 2026-11-19
 ### Security
 
 - **Custom attributes could carry script onto the front end.** A node's custom attributes were written onto its link unchecked, so anyone who could edit a menu, or a menu file imported from elsewhere, could add an event handler such as `onmouseover`, a `href` or `style` override, a front-end framework directive that runs code (`x-init`, `hx-get`, `v-html`, `ng-click`…), or an array value that expanded into further attributes. Custom attribute names are now an allowlist — `data-*` (except attributes that front-end frameworks run as code, such as htmx's `data-hx-*` and Datastar's `data-on-*`, `data-text` and `data-show`), `aria-*`, and plain attributes like `title`, `rel`, `id`, `lang`, `role` and `itemprop` — and values must be text. Anything else is refused when a node is saved, dropped from imports (control panel, console and Verbb Navigation), and skipped when a menu renders, which also covers menus saved before this release. Values are escaped as always; on a site whose front end runs a framework that executes other `data-*` attributes, treat menu editors as trusted.
