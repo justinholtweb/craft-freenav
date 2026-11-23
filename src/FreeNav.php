@@ -33,9 +33,11 @@ use JustinHoltWeb\FreeNav\Console\Commands\MenusImportCommand;
 use JustinHoltWeb\FreeNav\Console\Commands\MenusIndexCommand;
 use JustinHoltWeb\FreeNav\Console\Commands\MenusResaveNodesCommand;
 use JustinHoltWeb\FreeNav\Console\Commands\MigrateFromNavigationCommand;
+use JustinHoltWeb\FreeNav\Console\Commands\MigrateFromSectionCommand;
 use JustinHoltWeb\FreeNav\Elements\Node;
 use JustinHoltWeb\FreeNav\Enums\Preset;
 use JustinHoltWeb\FreeNav\FieldLayoutElements\BadgeField;
+use JustinHoltWeb\FreeNav\FieldLayoutElements\CraftIconField;
 use JustinHoltWeb\FreeNav\FieldLayoutElements\CssClassesField;
 use JustinHoltWeb\FreeNav\FieldLayoutElements\CustomAttributesField;
 use JustinHoltWeb\FreeNav\FieldLayoutElements\CustomUrlField;
@@ -72,7 +74,7 @@ class FreeNav extends Plugin
     /**
      * FreeNav 5's schema was 1.0.1; the bump runs the Craft 6 upgrade migration.
      */
-    public string $schemaVersion = '6.0.0';
+    public string $schemaVersion = '6.0.1';
 
     /**
      * Sites upgrade from the last FreeNav 5 release, so its migrations — and its custom-attribute
@@ -107,6 +109,7 @@ class FreeNav extends Plugin
         MenusExportCommand::class,
         MenusImportCommand::class,
         MigrateFromNavigationCommand::class,
+        MigrateFromSectionCommand::class,
     ];
 
     /**
@@ -313,6 +316,7 @@ class FreeNav extends Plugin
                     CssClassesField::class,
                     UrlSuffixField::class,
                     IconField::class,
+                    CraftIconField::class,
                     BadgeField::class,
                     CustomAttributesField::class,
                     VisibilityRulesField::class,

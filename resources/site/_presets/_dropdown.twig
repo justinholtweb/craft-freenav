@@ -23,8 +23,8 @@
                        role="menuitem"
                        {% if hasChildren %}aria-haspopup="true" aria-expanded="false"{% endif %}
                        {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}
-                       {% if node.isCurrent() %}aria-current="page"{% endif %}>
-                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                       {% if node.isCurrent() %}aria-current="page"{% endif %}{{ node.getCustomAttributesHtml(['aria-current', 'aria-expanded', 'aria-haspopup', 'class', 'rel', 'role', 'target']) }}>
+                        {% if node.hasIcon() %}{{ node.getIconHtml() }} {% endif %}
                         {{ node.title }}
                         {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
                         {% if hasChildren %}<span class="freenav-dropdown-arrow" aria-hidden="true"></span>{% endif %}
@@ -32,8 +32,8 @@
                 {% else %}
                     <span class="freenav-dropdown-link{% if node.classes %} {{ node.classes }}{% endif %}"
                           role="menuitem"
-                          {% if hasChildren %}aria-haspopup="true" aria-expanded="false"{% endif %}>
-                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                          {% if hasChildren %}aria-haspopup="true" aria-expanded="false"{% endif %}{{ node.getCustomAttributesHtml(['aria-expanded', 'aria-haspopup', 'class', 'role']) }}>
+                        {% if node.hasIcon() %}{{ node.getIconHtml() }} {% endif %}
                         {{ node.title }}
                         {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
                         {% if hasChildren %}<span class="freenav-dropdown-arrow" aria-hidden="true"></span>{% endif %}

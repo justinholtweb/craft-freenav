@@ -233,6 +233,7 @@ class Nodes
         $node->data = $nodeData['data'] ?? null;
         $node->newWindow = (bool) ($nodeData['newWindow'] ?? false);
         $node->icon = $nodeData['icon'] ?? null;
+        $node->craftIcon = $nodeData['craftIcon'] ?? null;
         $node->badge = $nodeData['badge'] ?? null;
         $node->visibilityRules = $nodeData['visibilityRules'] ?? null;
         $node->enabled = (bool) ($nodeData['enabled'] ?? true);

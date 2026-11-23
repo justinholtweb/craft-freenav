@@ -22,7 +22,10 @@ facades and validators):
 - `CustomUrlTest` — the custom URL gate, the env/alias rules and the URL suffix re-check.
 - `LegacyClassMapTest` — the Craft 6 upgrade migration's class map and its walker over stored
   values (project config, keys, `__assoc__` pairs, JSON in strings).
-- `VisibilityRuleTest`, `NodeHelperTest`, `EnumsTest`, `PropagationTest`, `BreadcrumbsTest`.
+- `NodeVisibilityConditionTest` — the condition builder ↔ stored rules conversion: only FreeNav's
+  rule classes are read from a posted config, unfinished rules are dropped, OR and groups refused.
+- `SectionImporterTest` — the section importer's tree building and its duck-typed link reading.
+- `VisibilityRuleTest` (including handle lists), `NodeHelperTest`, `EnumsTest`, `PropagationTest`, `BreadcrumbsTest`.
 
 ## Live checks
 

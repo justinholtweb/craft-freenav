@@ -106,6 +106,18 @@ class NodeInterface extends Structure
                 'description' => 'Icon class for the node.',
                 'resolve' => fn (Node $source) => $source->icon,
             ],
+            'craftIcon' => [
+                'name' => 'craftIcon',
+                'type' => Type::string(),
+                'description' => 'The name of the node’s Craft icon (Font Awesome Free).',
+                'resolve' => fn (Node $source) => $source->craftIcon,
+            ],
+            'iconHtml' => [
+                'name' => 'iconHtml',
+                'type' => Type::string(),
+                'description' => 'The node’s icon as HTML: its Craft icon as inline SVG, or its icon class as an <i> element.',
+                'resolve' => fn (Node $source) => $source->getIconHtml()?->toHtml(),
+            ],
             'badge' => [
                 'name' => 'badge',
                 'type' => Type::string(),

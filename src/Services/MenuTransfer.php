@@ -31,7 +31,7 @@ use function CraftCms\Cms\t;
  */
 class MenuTransfer
 {
-    public const string FORMAT_VERSION = '1.2.0';
+    public const string FORMAT_VERSION = '1.3.0';
 
     /** Deeper than any real menu; stops a hand-edited file recursing without end. */
     private const int MAX_DEPTH = 32;
@@ -269,6 +269,7 @@ class MenuTransfer
             'customAttributes' => $node->getCustomAttributesArray(),
             'newWindow' => $node->newWindow,
             'icon' => $node->icon,
+            'craftIcon' => $node->craftIcon,
             'badge' => $node->badge,
             'visibilityRules' => $node->getVisibilityRulesArray(),
             'data' => $node->getDataArray(),
@@ -337,6 +338,7 @@ class MenuTransfer
             $node->visibilityRules = $this->array($item['visibilityRules'] ?? null);
             $node->newWindow = (bool) ($item['newWindow'] ?? false);
             $node->icon = $this->string($item['icon'] ?? null);
+            $node->craftIcon = $this->string($item['craftIcon'] ?? null);
             $node->badge = $this->string($item['badge'] ?? null);
             $node->enabled = (bool) ($item['enabled'] ?? true);
 
@@ -360,11 +362,11 @@ class MenuTransfer
                 $result->errors[] = t('Node {path} has no title.', ['path' => $label], category: 'free-nav');
             }
 
-            if (! $node->validate(['customUrl', 'urlSuffix'])) {
+            if (! $node->validate(['customUrl', 'urlSuffix', 'craftIcon'])) {
                 $result->errors[] = t('Node {path} (“{title}”): {error}', [
                     'path' => $label,
                     'title' => $node->title,
-                    'error' => $node->errors()->first('customUrl') ?: $node->errors()->first('urlSuffix'),
+                    'error' => $node->errors()->first('customUrl') ?: ($node->errors()->first('urlSuffix') ?: $node->errors()->first('craftIcon')),
                 ], category: 'free-nav');
             }
 

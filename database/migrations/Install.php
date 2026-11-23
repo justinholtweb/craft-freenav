@@ -78,6 +78,7 @@ class Install extends Migration
                 $table->text('data')->nullable();
                 $table->boolean('newWindow')->default(false);
                 $table->string('icon', 255)->nullable();
+                $table->string('craftIcon', 255)->nullable();
                 $table->string('badge', 100)->nullable();
                 $table->text('visibilityRules')->nullable();
                 $table->boolean('deletedWithMenu')->nullable();

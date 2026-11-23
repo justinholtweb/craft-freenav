@@ -6,26 +6,26 @@ namespace JustinHoltWeb\FreeNav\FieldLayoutElements;
 
 use CraftCms\Cms\Element\Contracts\ElementInterface;
 use CraftCms\Cms\FieldLayout\FieldLayoutElementContext;
-use CraftCms\Cms\FieldLayout\LayoutElements\TextareaField;
-use CraftCms\Cms\Support\Json;
+use CraftCms\Cms\FieldLayout\LayoutElements\BaseNativeField;
 use CraftCms\Cms\Ui\Contracts\Control;
-use CraftCms\Cms\Ui\Controls\Textarea;
+use CraftCms\Cms\Ui\Controls\ConditionBuilder;
+use CraftCms\Cms\Ui\Enums\ControlMode;
+use JustinHoltWeb\FreeNav\Elements\Conditions\NodeVisibilityCondition;
+use JustinHoltWeb\FreeNav\Elements\Node;
 use Override;
 
 use function CraftCms\Cms\t;
 
 /**
- * Edited as JSON text; `Node::setAttributesFromRequest()` decodes it and `NodeRules` checks it.
+ * Edited with Craft's condition builder. The node keeps its rules as `[{type, operator, value}]`:
+ * the builder is built from them, and `Node::setAttributesFromRequest()` turns what it posts back
+ * into them ({@see NodeVisibilityCondition}).
  */
-class VisibilityRulesField extends TextareaField
+class VisibilityRulesField extends BaseNativeField
 {
     public string $attribute = 'visibilityRules';
 
     public bool $requirable = false;
-
-    public ?int $rows = 4;
-
-    public ?string $placeholder = '[{"type":"loggedIn","operator":"is","value":true}]';
 
     #[Override]
     protected function defaultLabel(?ElementInterface $element = null, bool $static = false): ?string
@@ -36,33 +36,20 @@ class VisibilityRulesField extends TextareaField
     #[Override]
     protected function defaultInstructions(?ElementInterface $element = null, bool $static = false): ?string
     {
-        return t('JSON rules controlling when this node is visible. Types: userGroup, loggedIn, urlSegment, entryType.', category: 'free-nav');
-    }
-
-    #[Override]
-    protected function value(?ElementInterface $element = null): mixed
-    {
-        $value = $element?->{$this->attribute()};
-
-        if (is_string($value)) {
-            $decoded = Json::decodeIfJson($value);
-
-            // Text that isn't JSON (a failed save) is shown back as typed.
-            if (! is_array($decoded)) {
-                return $value;
-            }
-
-            $value = $decoded;
-        }
-
-        return is_array($value) && $value !== [] ? (string) Json::encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : '';
+        return t('Show this node only when every rule passes. With no rules it’s always shown.', category: 'free-nav');
     }
 
     #[Override]
     protected function uiControl(FieldLayoutElementContext $context): ?Control
     {
-        $control = parent::uiControl($context);
+        $element = $context->element instanceof Node ? $context->element : null;
+        $config = $element->visibilityRulesBuilderConfig
+            ?? NodeVisibilityCondition::configFromRules($element?->getVisibilityRulesArray() ?? []);
 
-        return $control instanceof Textarea ? $control->monospace() : $control;
+        return ConditionBuilder::make($this->attribute())
+            ->conditionClass(NodeVisibilityCondition::class)
+            ->addRuleLabel(t('Add a rule', category: 'free-nav'))
+            ->value($config)
+            ->mode($context->mode === ControlMode::Editable ? ControlMode::Editable : ControlMode::ReadOnly);
     }
 }

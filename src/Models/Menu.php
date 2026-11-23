@@ -15,6 +15,7 @@ use Illuminate\Validation\Rule;
 use JustinHoltWeb\FreeNav\Elements\Node;
 use JustinHoltWeb\FreeNav\Enums\Propagation;
 use JustinHoltWeb\FreeNav\FieldLayoutElements\BadgeField;
+use JustinHoltWeb\FreeNav\FieldLayoutElements\CraftIconField;
 use JustinHoltWeb\FreeNav\FieldLayoutElements\CssClassesField;
 use JustinHoltWeb\FreeNav\FieldLayoutElements\CustomAttributesField;
 use JustinHoltWeb\FreeNav\FieldLayoutElements\CustomUrlField;
@@ -168,6 +169,7 @@ class Menu extends Model
             new NewWindowField,
             new CssClassesField,
             new UrlSuffixField,
+            new CraftIconField,
             new IconField,
             new BadgeField,
             new CustomAttributesField,

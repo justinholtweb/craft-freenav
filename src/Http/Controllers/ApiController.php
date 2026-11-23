@@ -119,6 +119,7 @@ class ApiController
             'customAttributes' => Node::safeCustomAttributes($node->getCustomAttributesArray()) ?? [],
             'newWindow' => $node->newWindow,
             'icon' => $node->icon,
+            'craftIcon' => $node->craftIcon,
             'badge' => $node->badge,
             'active' => $node->isActive(),
             'enabled' => $node->enabled,

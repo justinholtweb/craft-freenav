@@ -21,14 +21,14 @@
                     <a href="{{ node.getUrl() }}"
                        class="freenav-sidebar-link{% if node.classes %} {{ node.classes }}{% endif %}"
                        {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}
-                       {% if node.isCurrent() %}aria-current="page"{% endif %}>
-                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                       {% if node.isCurrent() %}aria-current="page"{% endif %}{{ node.getCustomAttributesHtml(['aria-current', 'class', 'rel', 'target']) }}>
+                        {% if node.hasIcon() %}{{ node.getIconHtml() }} {% endif %}
                         {{ node.title }}
                         {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
                     </a>
                 {% else %}
-                    <span class="freenav-sidebar-heading{% if node.classes %} {{ node.classes }}{% endif %}">
-                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                    <span class="freenav-sidebar-heading{% if node.classes %} {{ node.classes }}{% endif %}"{{ node.getCustomAttributesHtml(['class']) }}>
+                        {% if node.hasIcon() %}{{ node.getIconHtml() }} {% endif %}
                         {{ node.title }}
                         {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
                     </span>

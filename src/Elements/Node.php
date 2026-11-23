@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace JustinHoltWeb\FreeNav\Elements;
 
 use CraftCms\Cms\Cp\Data\ActionItem;
+use CraftCms\Cms\Cp\Icons;
 use CraftCms\Cms\Element\Actions\Delete;
 use CraftCms\Cms\Element\Actions\SetStatus;
 use CraftCms\Cms\Element\Conditions\Contracts\ElementConditionInterface;
@@ -13,6 +14,7 @@ use CraftCms\Cms\Element\Element;
 use CraftCms\Cms\Element\ElementHelper;
 use CraftCms\Cms\Element\Queries\Contracts\ElementQueryInterface;
 use CraftCms\Cms\FieldLayout\FieldLayout;
+use CraftCms\Cms\Support\CmsAssets;
 use CraftCms\Cms\Support\Env;
 use CraftCms\Cms\Support\Facades\Elements;
 use CraftCms\Cms\Support\Facades\Sites;
@@ -24,7 +26,9 @@ use CraftCms\RulesetValidation\Attributes\Ruleset;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\HtmlString;
+use InvalidArgumentException;
 use JustinHoltWeb\FreeNav\Elements\Conditions\NodeCondition;
+use JustinHoltWeb\FreeNav\Elements\Conditions\NodeVisibilityCondition;
 use JustinHoltWeb\FreeNav\Elements\Queries\NodeQuery;
 use JustinHoltWeb\FreeNav\Elements\Validation\NodeRules;
 use JustinHoltWeb\FreeNav\Enums\NodeType as NodeTypeEnum;
@@ -59,8 +63,8 @@ class Node extends Element
      * move a node into a menu its author can't edit.
      */
     public const array EDITABLE_ATTRIBUTES = [
-        'title', 'customUrl', 'classes', 'urlSuffix', 'customAttributes', 'newWindow', 'icon', 'badge',
-        'visibilityRules',
+        'title', 'customUrl', 'classes', 'urlSuffix', 'customAttributes', 'newWindow', 'icon', 'craftIcon',
+        'badge', 'visibilityRules',
     ];
 
     public ?int $menuId = null;
@@ -85,12 +89,32 @@ class Node extends Element
 
     public ?string $icon = null;
 
+    /** A Font Awesome Free icon from Craft's icon set, by name; see {@see isAllowedCraftIcon()}. */
+    public ?string $craftIcon = null;
+
     public ?string $badge = null;
 
     /** @var array<mixed>|string|null */
     public array|string|null $visibilityRules = null;
 
     public ?bool $deletedWithMenu = null;
+
+    /**
+     * Why the visibility rules posted by the condition builder couldn't be stored (OR, nested
+     * groups), for `NodeRules` to report against the field.
+     */
+    public ?string $visibilityRulesError = null;
+
+    /**
+     * The condition builder's config as last posted (FreeNav's rule classes only), so the node
+     * editor shows the builder as it was left when the form refreshes before saving.
+     *
+     * @var array<string, mixed>|null
+     */
+    public ?array $visibilityRulesBuilderConfig = null;
+
+    /** @var array<string, array<string, mixed>>|null Craft's icon index, read once. */
+    private static ?array $iconIndex = null;
 
     private ?ElementInterface $linkedElement = null;
 
@@ -465,8 +489,24 @@ class Node extends Element
             $attrs['rel'] = 'noopener noreferrer';
         }
 
-        // Custom attributes. Unsafe names are skipped here as well as refused on save, so a menu
-        // saved before 5.2.1 (or written straight to the database) can't put script on the page.
+        $attrs = array_merge($attrs, $this->getSafeCustomAttributes());
+
+        $attrs = array_merge($attrs, $this->getAriaAttributes());
+
+        return array_merge($attrs, $extra);
+    }
+
+    /**
+     * The node's custom attributes as `name => value`. Unsafe names are skipped here as well as
+     * refused on save, so a menu saved before 5.2.1 (or written straight to the database) can't
+     * put script on the page.
+     *
+     * @return array<string, string>
+     */
+    public function getSafeCustomAttributes(): array
+    {
+        $attrs = [];
+
         foreach ($this->getCustomAttributesArray() as $attr) {
             if (! is_array($attr) || empty($attr['key']) || ! self::isSafeAttributeName((string) $attr['key'])) {
                 continue;
@@ -475,13 +515,37 @@ class Node extends Element
             $value = self::customAttributeValue($attr['value'] ?? null);
 
             if ($value !== null) {
-                $attrs[$attr['key']] = $value;
+                $attrs[(string) $attr['key']] = $value;
             }
         }
 
-        $attrs = array_merge($attrs, $this->getAriaAttributes());
+        return $attrs;
+    }
 
-        return array_merge($attrs, $extra);
+    /**
+     * The custom attributes as HTML (with a leading space), for templates that write the rest of
+     * the link's attributes themselves, as the presets do. Names in `$except` are left out so the
+     * tag doesn't get them twice — except `rel`, which is only left out when the node opens in a
+     * new window (the template's `noopener noreferrer` wins then).
+     *
+     * @param  list<string>  $except
+     */
+    public function getCustomAttributesHtml(array $except = []): HtmlString
+    {
+        $except = array_map(strtolower(...), $except);
+
+        if (! $this->newWindow) {
+            $except = array_diff($except, ['rel']);
+        }
+
+        $attrs = array_filter(
+            $this->getSafeCustomAttributes(),
+            fn (string $name) => ! in_array(strtolower($name), $except, true),
+            ARRAY_FILTER_USE_KEY,
+        );
+
+        // beginTag() renders and escapes the attributes; keep only them.
+        return new HtmlString($attrs === [] ? '' : substr(Html::beginTag('i', $attrs), 2, -1));
     }
 
     /**
@@ -514,8 +578,21 @@ class Node extends Element
         return true;
     }
 
+    public function hasIcon(): bool
+    {
+        return $this->getIconHtml() !== null;
+    }
+
+    /**
+     * The node's Craft icon as inline SVG when it has a valid one, otherwise its icon class as an
+     * `<i>`, otherwise null.
+     */
     public function getIconHtml(): ?HtmlString
     {
+        if ($this->craftIcon && ($svg = self::craftIconSvg($this->craftIcon)) !== null) {
+            return new HtmlString(Html::tag('span', $svg, ['class' => 'freenav-icon', 'aria-hidden' => 'true']));
+        }
+
         if (empty($this->icon)) {
             return null;
         }
@@ -580,6 +657,7 @@ class Node extends Element
         $fields['customAttributes'] = fn () => $this->getCustomAttributesArray();
         $fields['data'] = fn () => $this->getDataArray();
         $fields['visibilityRules'] = fn () => $this->getVisibilityRulesArray();
+        unset($fields['visibilityRulesError'], $fields['visibilityRulesBuilderConfig']);
 
         return $fields;
     }
@@ -688,6 +766,7 @@ class Node extends Element
             'data' => self::encodeJsonColumn($this->data),
             'newWindow' => $this->newWindow,
             'icon' => $this->icon,
+            'craftIcon' => $this->craftIcon,
             'badge' => $this->badge,
             'visibilityRules' => self::encodeJsonColumn($this->visibilityRules),
             'deletedWithMenu' => $this->deletedWithMenu,
@@ -746,6 +825,18 @@ class Node extends Element
     {
         $values = array_intersect_key($values, array_flip(self::EDITABLE_ATTRIBUTES));
 
+        if (array_key_exists('customAttributes', $values) && is_array($values['customAttributes'])) {
+            $values['customAttributes'] = self::attributesFromTable($values['customAttributes']);
+        }
+
+        if (array_key_exists('visibilityRules', $values)) {
+            $values['visibilityRules'] = $this->visibilityRulesFromRequest($values['visibilityRules']);
+        }
+
+        if (array_key_exists('craftIcon', $values)) {
+            $values['craftIcon'] = is_string($values['craftIcon']) && trim($values['craftIcon']) !== '' ? trim($values['craftIcon']) : null;
+        }
+
         foreach (['customAttributes', 'visibilityRules'] as $json) {
             if (array_key_exists($json, $values) && is_string($values[$json])) {
                 $text = trim($values[$json]);
@@ -757,6 +848,65 @@ class Node extends Element
         }
 
         parent::setAttributesFromRequest($values);
+    }
+
+    /**
+     * The custom attributes table's rows as `[{key, value}]`, without rows that have no key.
+     *
+     * @param  array<mixed>  $rows
+     * @return list<array{key: string, value: mixed}>|null
+     */
+    public static function attributesFromTable(array $rows): ?array
+    {
+        $attributes = [];
+
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $key = is_scalar($row['key'] ?? null) ? trim((string) $row['key']) : '';
+
+            if ($key !== '') {
+                // A non-text value is passed on as it is, so validation can refuse it.
+                $attributes[] = ['key' => $key, 'value' => $row['value'] ?? ''];
+            }
+        }
+
+        return $attributes === [] ? null : $attributes;
+    }
+
+    /**
+     * The condition builder posts a condition config; it's turned into stored rules, and the
+     * node's rules the builder couldn't show are kept. A plain list of `{type, operator, value}`
+     * (an API client) or JSON text is passed through for `NodeRules` to check.
+     */
+    private function visibilityRulesFromRequest(mixed $value): mixed
+    {
+        $decoded = is_string($value) ? Json::decodeIfJson(trim($value)) : $value;
+
+        if (! is_array($decoded) || (! isset($decoded['conditionRules']) && ! isset($decoded['class']))) {
+            return $value;
+        }
+
+        $this->visibilityRulesError = null;
+        $this->visibilityRulesBuilderConfig = NodeVisibilityCondition::sanitizeConfig($decoded);
+        ['rules' => $rules, 'grouped' => $grouped] = NodeVisibilityCondition::rulesFromConfig($decoded);
+
+        if ($grouped) {
+            $this->visibilityRulesError = NodeVisibilityCondition::groupedError();
+
+            // Never null, so validation runs and reports the error.
+            return $this->visibilityRules ?? [];
+        }
+
+        foreach ($this->getVisibilityRulesArray() as $kept) {
+            if (is_array($kept) && ! NodeVisibilityCondition::isEditable($kept)) {
+                $rules[] = $kept;
+            }
+        }
+
+        return $rules === [] ? null : $rules;
     }
 
     // Permissions
@@ -896,6 +1046,74 @@ class Node extends Element
         }
 
         return true;
+    }
+
+    /**
+     * Whether a Craft icon name may be used on the front end: a key in Craft's icon index that
+     * isn't a Font Awesome Pro icon. Craft bundles Pro icons for its control panel only, so they
+     * can't go on a site. The name becomes a file path, so only the index decides — never a pattern.
+     */
+    public static function isAllowedCraftIcon(string $name): bool
+    {
+        if (! preg_match('/^[a-z0-9-]+$/', $name)) {
+            return false;
+        }
+
+        $icon = self::iconIndex()[$name] ?? null;
+
+        return is_array($icon) && ($icon['pro'] ?? true) === false;
+    }
+
+    /**
+     * A Craft icon's SVG sized to the text (`1em`, `currentColor`), or null when the name isn't
+     * one {@see isAllowedCraftIcon()} accepts.
+     */
+    public static function craftIconSvg(string $name): ?string
+    {
+        if (! self::isAllowedCraftIcon($name)) {
+            return null;
+        }
+
+        $path = CmsAssets::resourcesPath(sprintf('icons/%s/%s.svg', Icons::resolveIconFamily($name), $name));
+        $svg = is_file($path) ? file_get_contents($path) : false;
+
+        if (! is_string($svg) || stripos($svg, '<svg') === false) {
+            return null;
+        }
+
+        $svg = (string) preg_replace(Html::XML_DECLARATION_RE, '', $svg);
+        $svg = (string) preg_replace(Html::TITLE_TAG_RE, '', $svg);
+
+        try {
+            return Html::modifyTagAttributes(trim($svg), [
+                'width' => '1em',
+                'height' => '1em',
+                'fill' => 'currentColor',
+                'focusable' => 'false',
+            ]);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private static function iconIndex(): array
+    {
+        if (self::$iconIndex === null) {
+            $path = CmsAssets::resourcesPath('icons/index.php');
+            $index = is_file($path) ? require $path : [];
+            self::$iconIndex = [];
+
+            foreach (is_array($index) ? $index : [] as $name => $icon) {
+                if (is_array($icon)) {
+                    self::$iconIndex[(string) $name] = $icon;
+                }
+            }
+        }
+
+        return self::$iconIndex;
     }
 
     /**

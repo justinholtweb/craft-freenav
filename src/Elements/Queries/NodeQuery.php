@@ -68,6 +68,7 @@ class NodeQuery extends ElementQuery
             'freenav_nodes.data as data',
             'freenav_nodes.newWindow as newWindow',
             'freenav_nodes.icon as icon',
+            'freenav_nodes.craftIcon as craftIcon',
             'freenav_nodes.badge as badge',
             'freenav_nodes.visibilityRules as visibilityRules',
             'freenav_nodes.deletedWithMenu as deletedWithMenu',

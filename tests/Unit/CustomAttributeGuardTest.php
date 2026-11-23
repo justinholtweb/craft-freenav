@@ -131,3 +131,26 @@ it('skips unsafe attributes when building link attributes', function () {
         'title' => 'Home',
     ]);
 });
+
+it('renders custom attributes for the presets, leaving out what the tag already writes', function () {
+    $node = new class extends Node
+    {
+        public function __construct() {}
+    };
+    $node->customAttributes = [
+        ['key' => 'data-track', 'value' => 'a "quoted" <nav>'],
+        ['key' => 'rel', 'value' => 'nofollow'],
+        ['key' => 'role', 'value' => 'link'],
+        ['key' => 'onclick', 'value' => 'alert(1)'],
+    ];
+
+    expect((string) $node->getCustomAttributesHtml(['class', 'rel', 'role']))
+        ->toBe(' data-track="a &quot;quoted&quot; &lt;nav&gt;" rel="nofollow"');
+
+    $node->newWindow = true;
+    expect((string) $node->getCustomAttributesHtml(['rel']))
+        ->toBe(' data-track="a &quot;quoted&quot; &lt;nav&gt;" role="link"');
+
+    $node->customAttributes = null;
+    expect((string) $node->getCustomAttributesHtml())->toBe('');
+});

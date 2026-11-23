@@ -36,6 +36,7 @@ class NodeRules extends ElementRules
             'classes' => ['nullable', 'string', 'max:255'],
             'urlSuffix' => ['nullable', 'string', 'max:255', $this->urlSuffixRule(...)],
             'icon' => ['nullable', 'string', 'max:255'],
+            'craftIcon' => ['nullable', 'string', 'max:255', $this->craftIconRule(...)],
             'badge' => ['nullable', 'string', 'max:100'],
             'newWindow' => ['boolean'],
             'customAttributes' => ['nullable', $this->customAttributesRule(...)],
@@ -65,6 +66,16 @@ class NodeRules extends ElementRules
         }
     }
 
+    /**
+     * Font Awesome Free icons only: Craft's Pro icons are licensed for its control panel.
+     */
+    private function craftIconRule(string $attribute, mixed $value, Closure $fail): void
+    {
+        if (is_string($value) && $value !== '' && ! Node::isAllowedCraftIcon($value)) {
+            $fail(t('“{icon}” isn’t one of Craft’s free icons.', ['icon' => $value], category: 'free-nav'));
+        }
+    }
+
     private function customAttributesRule(string $attribute, mixed $value, Closure $fail): void
     {
         if (! $this->isJsonList($value)) {
@@ -86,6 +97,12 @@ class NodeRules extends ElementRules
 
     private function visibilityRulesRule(string $attribute, mixed $value, Closure $fail): void
     {
+        if ($this->subject->visibilityRulesError !== null) {
+            $fail($this->subject->visibilityRulesError);
+
+            return;
+        }
+
         if (! $this->isJsonList($value)) {
             $fail(t('Visibility rules must be a JSON array of {type, operator, value} objects.', category: 'free-nav'));
 
