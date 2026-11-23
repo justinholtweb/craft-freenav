@@ -81,6 +81,17 @@ class NodeInterface extends BaseInterfaceType
                     'type' => Type::string(),
                     'description' => 'Icon class for the node.',
                 ],
+                'craftIcon' => [
+                    'name' => 'craftIcon',
+                    'type' => Type::string(),
+                    'description' => 'The name of the Craft icon chosen for the node.',
+                ],
+                'iconHtml' => [
+                    'name' => 'iconHtml',
+                    'type' => Type::string(),
+                    'description' => 'The node’s icon as HTML: the Craft icon as inline SVG, or an `<i>` with the icon class.',
+                    'resolve' => fn($source) => $source->getIconHtml()?->__toString(),
+                ],
                 'badge' => [
                     'name' => 'badge',
                     'type' => Type::string(),

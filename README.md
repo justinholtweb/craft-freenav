@@ -32,7 +32,7 @@ FreeNav provides everything you need to manage navigation in Craft CMS, for free
 - **Multiple Node Types** — Entry, category, asset, Commerce product, custom URL, passive (no-link), and site nodes
 - **Conditional Visibility** — Show/hide nodes based on user group, logged-in state, URL segments, or entry type
 - **Built-in Cache** — Intelligent per-menu cache with automatic invalidation via tagged dependencies
-- **Icon & Badge Support** — Native icon class and badge text fields on every node
+- **Icon & Badge Support** — Pick an icon from Craft's icon picker (printed as inline SVG) or give an icon class, plus badge text, on every node
 - **Template Presets** — 6 ready-to-use render presets: default, dropdown, sidebar, breadcrumb, footer, mega menu
 - **JSON Import/Export** — Export and import full menu structures with element UID portability
 - **ARIA Accessibility** — Built-in accessible markup with `aria-current`, `aria-expanded`, `aria-haspopup`, and `role` attributes
@@ -84,6 +84,12 @@ Click **Build** on your menu. Use the slide-out panel to add nodes:
 - **Passive** — A non-linking label (great for dropdown group headings)
 
 Drag nodes to reorder. Nest them for submenus.
+
+Click **Edit** on a node for the rest of its settings: CSS classes, URL suffix, new window, badge, and
+
+- **Icon** — Craft's icon picker, limited to the free Font Awesome icons (Craft's Pro icons are licensed for the control panel only). It prints as an inline SVG sized to the text; the older **Icon Class** field still works and is used when no icon is picked.
+- **Custom Attributes** — a Key / Value table of HTML attributes for the link. Only safe names are accepted: `data-*`, `aria-*`, `title`, `rel`, `id`, `lang`, `role`, `itemprop` and similar.
+- **Visibility Rules** — Craft's condition builder (see [Conditional Visibility](#conditional-visibility)).
 
 ### 3. Render in Templates
 
@@ -247,8 +253,10 @@ Each `Node` element provides:
 | `urlSuffix` | `?string` | URL suffix (e.g., `#section`) |
 | `newWindow` | `bool` | Opens in new tab |
 | `icon` | `?string` | Icon CSS class |
+| `craftIcon` | `?string` | Name of the icon chosen in Craft's icon picker |
 | `badge` | `?string` | Badge text |
-| `getIconHtml()` | `?Markup` | Rendered `<i>` icon tag |
+| `hasIcon()` | `bool` | Has a Craft icon or an icon class |
+| `getIconHtml()` | `?Markup` | The Craft icon as inline SVG (`<span class="freenav-icon">`), otherwise an `<i>` with the icon class |
 | `getBadgeHtml()` | `?Markup` | Rendered badge `<span>` |
 | `isActive()` | `bool` | Current page or has active descendant |
 | `isCurrent()` | `bool` | Exact URL match with current page |
@@ -260,6 +268,7 @@ Each `Node` element provides:
 | `getLinkedElement()` | `?Element` | The linked Craft element |
 | `hasOverriddenTitle()` | `bool` | Title differs from linked element |
 | `getLinkAttributes(extra)` | `array` | HTML attributes for the link |
+| `getCustomAttributesHtml(except)` | `Markup` | The safe custom attributes as HTML, leaving out the names in `except` — for templates that write the other link attributes themselves, like the presets |
 | `getAriaAttributes()` | `array` | Computed ARIA attributes |
 | `level` | `int` | Depth in the menu, starting at 1 |
 | `getParent()` / `getChildren()` | | Craft's structure methods — node hierarchy lives in the menu's structure |
@@ -272,20 +281,24 @@ Each `Node` element provides:
 
 Add visibility rules to any node to control when it appears. Rules are evaluated at render time. Multiple rules use AND logic (all must pass).
 
+In the node's edit panel, **Visibility Rules** is Craft's condition builder: add a rule, pick **Logged In**, **User Group**, **URL Path** or **Page Entry Type**, and set it. A rule left unfinished (no groups chosen, an empty path) is ignored.
+
 ### Rule Types
 
-| Type | Operators | Value | Example |
-|------|-----------|-------|---------|
-| `loggedIn` | `is`, `isNot` | `true`/`false` | Show only to logged-in users |
-| `userGroup` | `is`, `isNot` | Group handle or `"guests"` | Show only to "members" group |
-| `urlSegment` | `is`, `isNot`, `contains`, `startsWith` | URL string | Show when URL contains "blog" |
-| `entryType` | `is`, `isNot` | Entry type handle | Show on "article" entries |
+| Type | Builder rule | Operators | Value | Example |
+|------|--------------|-----------|-------|---------|
+| `loggedIn` | Logged In | `is`, `isNot` | `true`/`false` | Show only to logged-in users |
+| `userGroup` | User Group | `is`, `isNot` | Group handle or `"guests"`, or a list of them | Show only to "members" or "staff" |
+| `urlSegment` | URL Path | `is`, `isNot`, `contains`, `startsWith` | The page's path, no leading slash | Show when the path starts with "blog" |
+| `entryType` | Page Entry Type | `is`, `isNot` | Entry type handle, or a list of them | Show on "article" entries |
 
-Rules are stored as JSON on the node:
+With a list, `is` passes when any of them matches and `isNot` when none does.
+
+Rules are stored as JSON on the node, which is also what export files, the REST API and the node `save` action use:
 ```json
 [
     {"type": "loggedIn", "operator": "is", "value": true},
-    {"type": "userGroup", "operator": "is", "value": "members"}
+    {"type": "userGroup", "operator": "is", "value": ["members", "staff"]}
 ]
 ```
 
@@ -353,6 +366,8 @@ FreeNav registers per-menu GQL types and scoped read permissions.
         url
         nodeType
         icon
+        craftIcon
+        iconHtml
         badge
         active
         children {
@@ -408,7 +423,7 @@ Every failure exits non-zero and changes nothing, so a deploy script can stop on
 ### Format
 ```json
 {
-    "freeNav": "1.2.0",
+    "freeNav": "1.3.0",
     "menu": {
         "name": "Main Menu",
         "handle": "mainMenu",
@@ -427,6 +442,29 @@ Every failure exits non-zero and changes nothing, so a deploy script can stop on
     ]
 }
 ```
+
+---
+
+## Import from a Structure Section
+
+Sites often build their menus as a Structure section, with a link field on each entry. One command turns that into FreeNav menus:
+
+```bash
+# Each top-level entry becomes a menu (handle from its slug); its descendants become the nodes
+php craft free-nav/migrate/from-section --section=menus --link-field=itemLink
+
+# The whole section as one menu
+php craft free-nav/migrate/from-section --section=mainNav --link-field=itemLink --menu=mainNav
+
+# A section of pages: without --link-field each entry links to itself
+php craft free-nav/migrate/from-section --section=pages --menu=pages
+```
+
+- A link to an entry or asset becomes an element node (an anchor or query string on Craft's Link field is kept as the URL suffix). Any other link becomes a custom URL, and an entry with no link a passive node. A link set to open in a new window keeps that.
+- Craft's Link field, relation fields (Entries, Assets) and link plugins that offer `getElement()`/`getUrl()` all work.
+- Nesting and order follow the section's structure. Disabled entries become disabled nodes.
+- Entries are read from the primary site; pass `--site=<handle>` for another.
+- Each menu goes through the same import as a JSON file, so links are checked first and a menu that fails changes nothing. A menu whose handle already exists is skipped unless you pass `--replace`, which replaces its nodes. Creating menus needs `allowAdminChanges`.
 
 ---
 
@@ -451,6 +489,9 @@ php craft free-nav/menus/clear-cache mainMenu
 # Export a menu as JSON, and import one (see Import / Export)
 php craft free-nav/menus/export mainMenu --file=mainMenu.json
 php craft free-nav/menus/import --file=mainMenu.json --replace
+
+# Turn a Structure section into menus (see Import from a Structure Section)
+php craft free-nav/migrate/from-section --section=menus --link-field=itemLink
 ```
 
 ---

@@ -52,4 +52,11 @@ final class VisibilityRuleTest extends TestCase
         $rule->type = '';
         self::assertTrue($rule->evaluate());
     }
+
+    public function testHandlesAcceptOneOrMany(): void
+    {
+        self::assertSame(['editors'], (new VisibilityRule(['type' => 'userGroup', 'value' => 'editors']))->getHandles());
+        self::assertSame(['guests', 'editors'], (new VisibilityRule(['type' => 'userGroup', 'value' => ['guests', ' editors ', '', null]]))->getHandles());
+        self::assertSame([], (new VisibilityRule(['type' => 'entryType', 'value' => null]))->getHandles());
+    }
 }

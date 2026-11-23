@@ -16,6 +16,7 @@ use craft\db\ActiveRecord;
  * @property string|null $data
  * @property bool $newWindow
  * @property string|null $icon
+ * @property string|null $craftIcon
  * @property string|null $badge
  * @property string|null $visibilityRules
  * @property bool|null $deletedWithMenu

@@ -36,8 +36,16 @@ application:
 - `PresetTest` — the `Preset` enum, including that every preset resolves to a
   template that actually ships in `src/templates/_presets/`.
 - `PropagationTest` — the `Propagation` enum.
-- `VisibilityRuleTest` — `VisibilityRule` validation ranges and the
-  `evaluate()` fall-through.
+- `VisibilityRuleTest` — `VisibilityRule` validation ranges, the
+  `evaluate()` fall-through and one-or-many handles.
+- `CustomAttributesTest` — the edit panel's Key / Value rows → stored list,
+  and the Craft icon name pre-filter.
+- `SectionImporterTest` — reading a link field's value and nesting entries
+  by level for `free-nav/migrate/from-section`.
+
+`tests/integration/*.php` run inside the plugin-testing Craft install (see
+`CLAUDE.md`): `trust.php` (permissions), `transfer.php` (import/export) and
+`editor.php` (the edit panel's fields over HTTP, and the section importer).
 
 Behavior that requires a live request, user session, or database (element
 syncing, rendering, multi-site propagation) is covered by the manual testing

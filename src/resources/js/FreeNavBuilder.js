@@ -38,6 +38,10 @@
             this._bindCollapse();
             this._bindDragDrop();
             this._bindPanels();
+
+            // The edit panel's Craft-rendered fields sit in a form so they can be serialised;
+            // pressing Enter in one must not submit the page.
+            document.getElementById('freenav-edit-advanced')?.addEventListener('submit', e => e.preventDefault());
         },
 
         _bindAddNode: function() {
@@ -455,9 +459,21 @@
                 Craft.sendActionRequest('POST', 'free-nav/nodes/get-parent-options', {
                     data: { menuId: this.menuId, excludeNodeId: nodeId },
                 }),
+                Craft.sendActionRequest('GET', 'free-nav/nodes/edit-fields', {
+                    params: { nodeId: nodeId },
+                }),
             ])
-                .then(([nodeResponse, parentResponse]) => {
+                .then(([nodeResponse, parentResponse, fieldsResponse]) => {
                     const node = nodeResponse.data;
+
+                    // Icon picker, custom attributes table and visibility condition builder are
+                    // Craft's own inputs, rendered by the server. The HTML goes in first so their
+                    // scripts find it.
+                    const advanced = document.getElementById('freenav-edit-advanced');
+                    advanced.innerHTML = fieldsResponse.data.html;
+                    Craft.appendHeadHtml(fieldsResponse.data.headHtml);
+                    Craft.appendBodyHtml(fieldsResponse.data.bodyHtml);
+                    Craft.initUiElements(advanced);
 
                     document.getElementById('freenav-edit-node-id').value = node.id;
                     document.getElementById('freenav-edit-title').value = node.title || '';
@@ -505,15 +521,25 @@
 
             const newParentId = document.getElementById('freenav-edit-parent')?.value || null;
 
-            const data = {
+            // The advanced fields post as a form (nested names such as
+            // visibilityRules[conditionRules][1][values][]), with the simple fields added to it.
+            const data = new FormData(document.getElementById('freenav-edit-advanced'));
+            const newWindow = document.querySelector('#freenav-edit-newwindow input')?.value === '1';
+            Object.entries({
                 nodeId: nodeId,
                 title: document.getElementById('freenav-edit-title')?.value || '',
-                customUrl: document.getElementById('freenav-edit-url')?.value || null,
-                classes: document.getElementById('freenav-edit-classes')?.value || null,
-                urlSuffix: document.getElementById('freenav-edit-url-suffix')?.value || null,
-                icon: document.getElementById('freenav-edit-icon')?.value || null,
-                badge: document.getElementById('freenav-edit-badge')?.value || null,
-            };
+                customUrl: document.getElementById('freenav-edit-url')?.value || '',
+                classes: document.getElementById('freenav-edit-classes')?.value || '',
+                urlSuffix: document.getElementById('freenav-edit-url-suffix')?.value || '',
+                icon: document.getElementById('freenav-edit-icon')?.value || '',
+                badge: document.getElementById('freenav-edit-badge')?.value || '',
+                newWindow: newWindow ? '1' : '',
+            }).forEach(([key, value]) => data.set(key, value));
+
+            // An empty attributes table posts nothing; say so, or the old attributes would stay.
+            if (![...data.keys()].some(key => key.startsWith('customAttributes['))) {
+                data.set('customAttributes', '');
+            }
 
             // Save node fields first, then move if parent changed
             Craft.sendActionRequest('POST', 'free-nav/nodes/save', { data })

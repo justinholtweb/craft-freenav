@@ -198,6 +198,15 @@
     transform: translateX(0);
 }
 
+/* Room for the visibility condition builder's rule rows */
+#freenav-edit-panel {
+    width: min(600px, 100vw);
+}
+
+.freenav-edit-advanced .field + .field {
+    margin-top: 24px;
+}
+
 .freenav-add-panel-content,
 .freenav-edit-panel-content {
     padding: 24px;

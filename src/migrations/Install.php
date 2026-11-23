@@ -86,6 +86,7 @@ class Install extends Migration
             'data' => $this->text(),
             'newWindow' => $this->boolean()->notNull()->defaultValue(false),
             'icon' => $this->string(255),
+            'craftIcon' => $this->string(100),
             'badge' => $this->string(100),
             'visibilityRules' => $this->text(),
             'deletedWithMenu' => $this->boolean(),

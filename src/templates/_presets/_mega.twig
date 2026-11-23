@@ -21,8 +21,8 @@
                            role="menuitem"
                            {% if hasChildren %}aria-haspopup="true" aria-expanded="false"{% endif %}
                            {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}
-                           {% if node.isCurrent() %}aria-current="page"{% endif %}>
-                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                           {% if node.isCurrent() %}aria-current="page"{% endif %}{{ node.getCustomAttributesHtml(['aria-current', 'aria-expanded', 'aria-haspopup', 'class', 'rel', 'role', 'target']) }}>
+                            {% if node.hasIcon() %}{{ node.getIconHtml() }} {% endif %}
                             {{ node.title }}
                             {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
                         </a>
@@ -31,7 +31,7 @@
                                 type="button"
                                 role="menuitem"
                                 {% if hasChildren %}aria-haspopup="true" aria-expanded="false"{% endif %}>
-                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                            {% if node.hasIcon() %}{{ node.getIconHtml() }} {% endif %}
                             {{ node.title }}
                             {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
                         </button>
@@ -41,13 +41,13 @@
                     {% if node.getUrl() %}
                         <a href="{{ node.getUrl() }}"
                            class="freenav-mega-column-heading{% if node.classes %} {{ node.classes }}{% endif %}"
-                           {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}>
-                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                           {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}{{ node.getCustomAttributesHtml(['class', 'rel', 'target']) }}>
+                            {% if node.hasIcon() %}{{ node.getIconHtml() }} {% endif %}
                             {{ node.title }}
                         </a>
                     {% else %}
-                        <span class="freenav-mega-column-heading{% if node.classes %} {{ node.classes }}{% endif %}">
-                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                        <span class="freenav-mega-column-heading{% if node.classes %} {{ node.classes }}{% endif %}"{{ node.getCustomAttributesHtml(['class']) }}>
+                            {% if node.hasIcon() %}{{ node.getIconHtml() }} {% endif %}
                             {{ node.title }}
                         </span>
                     {% endif %}
@@ -57,14 +57,14 @@
                         <a href="{{ node.getUrl() }}"
                            class="freenav-mega-link{% if node.classes %} {{ node.classes }}{% endif %}"
                            role="menuitem"
-                           {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}>
-                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                           {% if node.newWindow %}target="_blank" rel="noopener noreferrer"{% endif %}{{ node.getCustomAttributesHtml(['class', 'rel', 'role', 'target']) }}>
+                            {% if node.hasIcon() %}{{ node.getIconHtml() }} {% endif %}
                             {{ node.title }}
                             {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
                         </a>
                     {% else %}
-                        <span class="freenav-mega-link{% if node.classes %} {{ node.classes }}{% endif %}" role="menuitem">
-                            {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                        <span class="freenav-mega-link{% if node.classes %} {{ node.classes }}{% endif %}" role="menuitem"{{ node.getCustomAttributesHtml(['class', 'role']) }}>
+                            {% if node.hasIcon() %}{{ node.getIconHtml() }} {% endif %}
                             {{ node.title }}
                             {% if node.badge %}{{ node.getBadgeHtml() }}{% endif %}
                         </span>

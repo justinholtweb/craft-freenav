@@ -8,11 +8,107 @@ use craft\db\Query;
 use justinholt\freenav\FreeNav;
 use justinholt\freenav\models\Menu;
 use justinholt\freenav\models\MenuSiteSettings;
+use yii\base\InvalidArgumentException;
 use yii\console\ExitCode;
 
 class MigrateController extends Controller
 {
     public $defaultAction = 'from-navigation';
+
+    /**
+     * @var string|null The handle of the Structure section to import (from-section).
+     */
+    public ?string $section = null;
+
+    /**
+     * @var string|null The handle of the entries' link field. Without one, each entry links to itself (from-section).
+     */
+    public ?string $linkField = null;
+
+    /**
+     * @var string|null Import the whole section as one menu with this handle, instead of one menu per top-level entry (from-section).
+     */
+    public ?string $menu = null;
+
+    /**
+     * @var string|null The handle of the site to read entries from. Defaults to the primary site (from-section).
+     */
+    public ?string $site = null;
+
+    /**
+     * @var bool Replace the nodes of menus that already exist (from-section).
+     */
+    public bool $replace = false;
+
+    public function options($actionID): array
+    {
+        $options = parent::options($actionID);
+
+        if ($actionID === 'from-section') {
+            array_push($options, 'section', 'linkField', 'menu', 'site', 'replace');
+        }
+
+        return $options;
+    }
+
+    /**
+     * Imports a Structure section that was used as a menu: each top-level entry becomes a menu
+     * and its descendants its nodes (or, with --menu, the whole section one menu). Links come
+     * from --link-field: linked entries and assets become element nodes, other links custom
+     * URLs, and entries without a link passive nodes.
+     */
+    public function actionFromSection(): int
+    {
+        if (!$this->section) {
+            $this->stderr("Pass the section to import with --section=<handle>.\n");
+            return ExitCode::USAGE;
+        }
+
+        $site = null;
+        if ($this->site) {
+            $site = Craft::$app->getSites()->getSiteByHandle($this->site);
+            if (!$site) {
+                $this->stderr("There is no site with the handle '{$this->site}'.\n");
+                return ExitCode::USAGE;
+            }
+        }
+
+        $importer = FreeNav::getInstance()->getSectionImporter();
+
+        try {
+            $menus = $importer->buildMenus($this->section, $this->linkField ?: null, $this->menu ?: null, $site);
+        } catch (InvalidArgumentException $e) {
+            $this->stderr($e->getMessage() . "\n");
+            return ExitCode::USAGE;
+        }
+
+        if ($menus === []) {
+            $this->stdout("The section has no entries.\n");
+            return ExitCode::OK;
+        }
+
+        $failed = 0;
+
+        foreach ($importer->import($menus, $this->replace) as $handle => $result) {
+            $this->stdout("{$handle}: ");
+
+            if ($result->getSuccess()) {
+                $this->stdout(($result->createdMenu ? 'created, ' : 'replaced, ') . "{$result->nodesImported} node(s)\n");
+            } else {
+                $failed++;
+                $this->stdout("not imported\n");
+                foreach ($result->errors as $error) {
+                    $this->stderr("  Error: {$error}\n");
+                }
+            }
+
+            foreach ($result->warnings as $warning) {
+                $this->stdout("  Warning: {$warning}\n");
+            }
+        }
+
+        return $failed ? ExitCode::UNSPECIFIED_ERROR : ExitCode::OK;
+    }
 
     public function actionFromNavigation(): int
     {

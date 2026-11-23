@@ -5,9 +5,13 @@ namespace justinholt\freenav\fieldlayoutelements;
 use Craft;
 use craft\base\ElementInterface;
 use craft\fieldlayoutelements\BaseNativeField;
-use craft\helpers\Json;
+use justinholt\freenav\elements\conditions\visibility\NodeVisibilityCondition;
 use justinholt\freenav\elements\Node;
 
+/**
+ * Edits the node's visibility rules with Craft's condition builder. `Node::setVisibilityRulesFromPost()`
+ * turns what it posts back into the stored rules.
+ */
 class VisibilityRulesField extends BaseNativeField
 {
     public string $attribute = 'visibilityRules';
@@ -20,21 +24,16 @@ class VisibilityRulesField extends BaseNativeField
 
     public function instructions(?ElementInterface $element = null, bool $static = false): ?string
     {
-        return Craft::t('free-nav', 'JSON rules controlling when this node is visible. Types: userGroup, loggedIn, urlSegment, entryType.');
+        return Craft::t('free-nav', 'Only show this node when every rule matches. With no rules, it always shows.');
     }
 
     protected function inputHtml(?ElementInterface $element = null, bool $static = false): ?string
     {
         /** @var Node|null $element */
-        $value = $element?->getVisibilityRulesArray() ?? [];
+        $condition = NodeVisibilityCondition::fromRules($element?->getVisibilityRulesArray() ?? []);
+        $condition->id = 'visibilityRules';
+        $condition->name = 'visibilityRules';
 
-        return Craft::$app->getView()->renderTemplate('_includes/forms/textarea', [
-            'id' => 'visibilityRules',
-            'name' => 'visibilityRules',
-            'value' => $value ? Json::encode($value, JSON_PRETTY_PRINT) : '',
-            'class' => 'code',
-            'rows' => 4,
-            'placeholder' => '[{"type":"loggedIn","operator":"is","value":true}]',
-        ]);
+        return $condition->getBuilderHtml();
     }
 }

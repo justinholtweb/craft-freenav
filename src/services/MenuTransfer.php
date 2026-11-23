@@ -22,7 +22,7 @@ use yii\base\Component;
  */
 class MenuTransfer extends Component
 {
-    public const FORMAT_VERSION = '1.2.0';
+    public const FORMAT_VERSION = '1.3.0';
 
     /** Deeper than any real menu; stops a hand-edited file recursing without end. */
     private const MAX_DEPTH = 32;
@@ -224,6 +224,7 @@ class MenuTransfer extends Component
             'customAttributes' => $node->getCustomAttributesArray(),
             'newWindow' => $node->newWindow,
             'icon' => $node->icon,
+            'craftIcon' => $node->craftIcon,
             'badge' => $node->badge,
             'visibilityRules' => $node->getVisibilityRulesArray(),
             'data' => $node->getDataArray(),
@@ -283,6 +284,7 @@ class MenuTransfer extends Component
             $node->visibilityRules = $this->_array($item['visibilityRules'] ?? null);
             $node->newWindow = (bool)($item['newWindow'] ?? false);
             $node->icon = $this->_string($item['icon'] ?? null);
+            $node->craftIcon = $this->_string($item['craftIcon'] ?? null);
             $node->badge = $this->_string($item['badge'] ?? null);
             $node->enabled = (bool)($item['enabled'] ?? true);
 
@@ -306,11 +308,11 @@ class MenuTransfer extends Component
                 $result->errors[] = Craft::t('free-nav', 'Node {path} has no title.', ['path' => $label]);
             }
 
-            if (!$node->validate(['customUrl', 'urlSuffix'])) {
+            if (!$node->validate(['customUrl', 'urlSuffix', 'craftIcon'])) {
                 $result->errors[] = Craft::t('free-nav', 'Node {path} (“{title}”): {error}', [
                     'path' => $label,
                     'title' => $node->title,
-                    'error' => $node->getFirstError('customUrl') ?? $node->getFirstError('urlSuffix'),
+                    'error' => $node->getFirstError('customUrl') ?? $node->getFirstError('urlSuffix') ?? $node->getFirstError('craftIcon'),
                 ]);
             }
 

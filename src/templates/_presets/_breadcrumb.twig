@@ -10,18 +10,18 @@
         {% for node in nodes %}
             <li class="freenav-breadcrumb-item{% if loop.last %} freenav-breadcrumb-current{% endif %}">
                 {% if loop.last %}
-                    <span aria-current="page"{% if node.classes %} class="{{ node.classes }}"{% endif %}>
-                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                    <span aria-current="page"{% if node.classes %} class="{{ node.classes }}"{% endif %}{{ node.getCustomAttributesHtml(['aria-current', 'class']) }}>
+                        {% if node.hasIcon() %}{{ node.getIconHtml() }} {% endif %}
                         {{ node.title }}
                     </span>
                 {% elseif node.getUrl() %}
-                    <a href="{{ node.getUrl() }}"{% if node.classes %} class="{{ node.classes }}"{% endif %}>
-                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                    <a href="{{ node.getUrl() }}"{% if node.classes %} class="{{ node.classes }}"{% endif %}{{ node.getCustomAttributesHtml(['class']) }}>
+                        {% if node.hasIcon() %}{{ node.getIconHtml() }} {% endif %}
                         {{ node.title }}
                     </a>
                 {% else %}
-                    <span{% if node.classes %} class="{{ node.classes }}"{% endif %}>
-                        {% if node.icon %}{{ node.getIconHtml() }} {% endif %}
+                    <span{% if node.classes %} class="{{ node.classes }}"{% endif %}{{ node.getCustomAttributesHtml(['class']) }}>
+                        {% if node.hasIcon() %}{{ node.getIconHtml() }} {% endif %}
                         {{ node.title }}
                     </span>
                 {% endif %}

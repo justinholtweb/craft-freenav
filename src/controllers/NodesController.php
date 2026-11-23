@@ -6,9 +6,13 @@ use Craft;
 use craft\errors\UnsupportedSiteException;
 use craft\helpers\Cp;
 use craft\helpers\Json;
+use craft\models\FieldLayout;
 use craft\web\Controller;
 use justinholt\freenav\elements\Node;
 use justinholt\freenav\enums\NodeType;
+use justinholt\freenav\fieldlayoutelements\CraftIconField;
+use justinholt\freenav\fieldlayoutelements\CustomAttributesField;
+use justinholt\freenav\fieldlayoutelements\VisibilityRulesField;
 use justinholt\freenav\FreeNav;
 use justinholt\freenav\models\Menu;
 use yii\web\BadRequestHttpException;
@@ -184,25 +188,31 @@ class NodesController extends Controller
         $this->_requireEditNodes($node->getMenu());
 
         $node->title = $request->getBodyParam('title', $node->title);
-        $node->customUrl = $request->getBodyParam('customUrl', $node->customUrl);
-        $node->classes = $request->getBodyParam('classes', $node->classes);
-        $node->urlSuffix = $request->getBodyParam('urlSuffix', $node->urlSuffix);
+        $node->customUrl = $this->_optionalString('customUrl', $node->customUrl);
+        $node->classes = $this->_optionalString('classes', $node->classes);
+        $node->urlSuffix = $this->_optionalString('urlSuffix', $node->urlSuffix);
         $node->newWindow = (bool)$request->getBodyParam('newWindow', $node->newWindow);
-        $node->icon = $request->getBodyParam('icon', $node->icon);
-        $node->badge = $request->getBodyParam('badge', $node->badge);
+        $node->icon = $this->_optionalString('icon', $node->icon);
+        $node->craftIcon = $this->_optionalString('craftIcon', $node->craftIcon);
+        $node->badge = $this->_optionalString('badge', $node->badge);
 
         $customAttributes = $request->getBodyParam('customAttributes');
         if ($customAttributes !== null) {
-            $node->customAttributes = is_string($customAttributes) ? Json::decodeIfJson($customAttributes) : $customAttributes;
+            $node->customAttributes = Node::normalizeCustomAttributes($customAttributes);
         }
 
         $visibilityRules = $request->getBodyParam('visibilityRules');
         if ($visibilityRules !== null) {
-            $node->visibilityRules = is_string($visibilityRules) ? Json::decodeIfJson($visibilityRules) : $visibilityRules;
+            $node->setVisibilityRulesFromPost($visibilityRules);
         }
 
         if (!Craft::$app->getElements()->saveElement($node)) {
-            return $this->asFailure(Craft::t('free-nav', 'Couldn\'t save node.'));
+            $errors = $node->getFirstErrors();
+
+            return $this->asFailure(
+                $errors ? implode(' ', $errors) : Craft::t('free-nav', 'Couldn\'t save node.'),
+                ['errors' => $node->getErrors()],
+            );
         }
 
         return $this->asJson([
@@ -264,6 +274,38 @@ class NodesController extends Controller
             'icon' => $node->icon,
             'badge' => $node->badge,
             'parentId' => $node->getParentId(),
+        ]);
+    }
+
+    /**
+     * The edit panel's Craft-rendered fields: icon picker, custom attributes table and the
+     * visibility condition builder, with the scripts they need.
+     */
+    public function actionEditFields(): Response
+    {
+        $this->requireAcceptsJson();
+
+        $node = $this->_getNode(Craft::$app->getRequest()->getRequiredParam('nodeId'));
+
+        if (!$node) {
+            throw new NotFoundHttpException('Node not found');
+        }
+
+        $this->_requireEditNodes($node->getMenu());
+
+        $view = $this->getView();
+        $layout = $node->getFieldLayout() ?? new FieldLayout(['type' => Node::class]);
+        $html = '';
+
+        foreach ([new CraftIconField(), new CustomAttributesField(), new VisibilityRulesField()] as $field) {
+            $field->setLayout($layout);
+            $html .= $field->formHtml($node);
+        }
+
+        return $this->asJson([
+            'html' => $html,
+            'headHtml' => $view->getHeadHtml(),
+            'bodyHtml' => $view->getBodyHtml(),
         ]);
     }
 
@@ -343,6 +385,26 @@ class NodesController extends Controller
         }
 
         return $this->asSuccess();
+    }
+
+    /**
+     * A posted text value, with an empty string meaning "none". Absent keeps the current value.
+     */
+    private function _optionalString(string $name, ?string $current): ?string
+    {
+        $params = Craft::$app->getRequest()->getBodyParams();
+
+        if (!array_key_exists($name, $params)) {
+            return $current;
+        }
+
+        if (!is_scalar($params[$name])) {
+            return $params[$name] === null ? null : $current;
+        }
+
+        $value = trim((string)$params[$name]);
+
+        return $value === '' ? null : $value;
     }
 
     private function _requireEditNodes(Menu $menu): void

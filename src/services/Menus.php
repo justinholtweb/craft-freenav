@@ -417,6 +417,7 @@ class Menus extends Component
             $newNode->data = $node->data;
             $newNode->newWindow = $node->newWindow;
             $newNode->icon = $node->icon;
+            $newNode->craftIcon = $node->craftIcon;
             $newNode->badge = $node->badge;
             $newNode->visibilityRules = $node->visibilityRules;
             $newNode->enabled = $node->enabled;

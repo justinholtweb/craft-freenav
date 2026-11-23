@@ -33,6 +33,7 @@ use justinholt\freenav\services\MenuTransfer;
 use justinholt\freenav\services\Nodes;
 use justinholt\freenav\services\NodeTypes;
 use justinholt\freenav\services\Renderer;
+use justinholt\freenav\services\SectionImporter;
 use justinholt\freenav\variables\FreeNavVariable;
 use yii\base\Event;
 
@@ -44,11 +45,12 @@ use yii\base\Event;
  * @property-read Breadcrumbs $breadcrumbs
  * @property-read MenuCache $menuCache
  * @property-read MenuTransfer $menuTransfer
+ * @property-read SectionImporter $sectionImporter
  * @method Settings getSettings()
  */
 class FreeNav extends Plugin
 {
-    public string $schemaVersion = '1.0.1';
+    public string $schemaVersion = '1.0.2';
     public bool $hasCpSettings = true;
     public bool $hasCpSection = true;
 
@@ -63,6 +65,7 @@ class FreeNav extends Plugin
                 'breadcrumbs' => Breadcrumbs::class,
                 'menuCache' => MenuCache::class,
                 'menuTransfer' => MenuTransfer::class,
+                'sectionImporter' => SectionImporter::class,
             ],
         ];
     }
@@ -80,6 +83,11 @@ class FreeNav extends Plugin
     public function getMenuTransfer(): MenuTransfer
     {
         return $this->get('menuTransfer');
+    }
+
+    public function getSectionImporter(): SectionImporter
+    {
+        return $this->get('sectionImporter');
     }
 
     public function getNodeTypes(): NodeTypes

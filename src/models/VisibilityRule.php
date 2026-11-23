@@ -5,6 +5,13 @@ namespace justinholt\freenav\models;
 use Craft;
 use craft\base\Model;
 
+/**
+ * One of a node's visibility rules: `{"type": "loggedIn", "operator": "is", "value": true}`.
+ *
+ * A node is shown only when every rule passes. `userGroup` and `entryType` take one handle or a
+ * list of them: `is` passes when any matches, `isNot` when none does. The control panel edits
+ * these through `NodeVisibilityCondition`; this list is still what's stored and exported.
+ */
 class VisibilityRule extends Model
 {
     public string $type = '';
@@ -17,7 +24,27 @@ class VisibilityRule extends Model
             [['type'], 'required'],
             [['type'], 'in', 'range' => ['userGroup', 'loggedIn', 'urlSegment', 'entryType', 'custom']],
             [['operator'], 'in', 'range' => ['is', 'isNot', 'contains', 'startsWith']],
+            [['value'], function(string $attribute) {
+                if (in_array($this->type, ['userGroup', 'entryType'], true) && $this->getHandles() === []) {
+                    $this->addError($attribute, Craft::t('free-nav', 'Choose at least one.'));
+                }
+            }],
         ];
+    }
+
+    /**
+     * The handles a `userGroup` or `entryType` rule matches against.
+     *
+     * @return string[]
+     */
+    public function getHandles(): array
+    {
+        $values = is_array($this->value) ? $this->value : [$this->value];
+
+        return array_values(array_filter(
+            array_map(fn($v) => is_scalar($v) ? trim((string)$v) : '', $values),
+            fn(string $v) => $v !== '',
+        ));
     }
 
     public function evaluate(): bool
@@ -45,26 +72,16 @@ class VisibilityRule extends Model
     private function _evaluateUserGroup(): bool
     {
         $user = Craft::$app->getUser()->getIdentity();
+        $matches = false;
 
-        if ($this->value === 'guests') {
-            return match ($this->operator) {
-                'is' => $user === null,
-                'isNot' => $user !== null,
-                default => true,
-            };
+        foreach ($this->getHandles() as $handle) {
+            if ($handle === 'guests' ? $user === null : ($user !== null && $user->isInGroup($handle))) {
+                $matches = true;
+                break;
+            }
         }
 
-        if ($user === null) {
-            return $this->operator === 'isNot';
-        }
-
-        $isInGroup = $user->isInGroup($this->value);
-
-        return match ($this->operator) {
-            'is' => $isInGroup,
-            'isNot' => !$isInGroup,
-            default => true,
-        };
+        return $this->_applyMatch($matches);
     }
 
     private function _evaluateUrlSegment(): bool
@@ -88,16 +105,16 @@ class VisibilityRule extends Model
     private function _evaluateEntryType(): bool
     {
         $element = Craft::$app->getUrlManager()->getMatchedElement();
+        $typeHandle = $element instanceof \craft\elements\Entry ? $element->getType()->handle : null;
 
-        if (!$element instanceof \craft\elements\Entry) {
-            return $this->operator === 'isNot';
-        }
+        return $this->_applyMatch($typeHandle !== null && in_array($typeHandle, $this->getHandles(), true));
+    }
 
-        $typeHandle = $element->getType()->handle;
-
+    private function _applyMatch(bool $matches): bool
+    {
         return match ($this->operator) {
-            'is' => $typeHandle === $this->value,
-            'isNot' => $typeHandle !== $this->value,
+            'is' => $matches,
+            'isNot' => !$matches,
             default => true,
         };
     }
