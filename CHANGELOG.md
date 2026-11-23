@@ -1,5 +1,24 @@
 # Changelog
 
+## 6.0.0-beta.3 - 2026-11-23
+
+### Added
+
+- **Visibility rules use Craft's condition builder.** Logged In, User Group, URL Path and Page Entry Type rules replace the JSON text box. Rules are still stored as `[{type, operator, value}]`, so templates, the REST API, GraphQL and export files are unchanged; a node refuses to save if the builder is set to "Any" or uses groups. User Group and Page Entry Type rules take several values. ([#2](https://github.com/justinholtweb/craft-freenav/issues/2))
+- **Custom attributes are a Key / Value table** instead of a JSON text box. The attribute allowlist is unchanged. ([#2](https://github.com/justinholtweb/craft-freenav/issues/2))
+- **An Icon field with Craft's icon picker.** Nodes can show a Font Awesome Free icon as inline SVG (`1em`, `currentColor`), alongside the existing Icon Class field. New menus get it in their node layout; add it to existing menus' layouts in their settings. Pro icons can't be chosen: Craft's licence for them covers the control panel only. Exposed as `craftIcon` in the REST API and GraphQL, with `iconHtml` in GraphQL. ([#2](https://github.com/justinholtweb/craft-freenav/issues/2))
+- `php artisan free-nav:migrate:from-section` builds menus from a Structure section: top-level entries become menus and their descendants nodes, linked through a Link field, a relation field or a third-party link field. ([#2](https://github.com/justinholtweb/craft-freenav/issues/2))
+- `Node::hasIcon()`. The presets use it, so a node with only a Craft icon shows its icon.
+
+### Changed
+
+- Visibility rules for `userGroup` and `entryType` accept a list of handles: `is` passes when any matches, `isNot` when none does.
+- Export files are format 1.3.0 and carry `craftIcon`. Older files import as before.
+
+### Fixed
+
+- **The presets didn't print custom attributes.** Only `node.getLink()` added them, so a node's custom attributes never reached the page in a menu rendered with a preset. Every preset now adds them to the node's link or label, leaving out any the preset already writes. Templates of your own can do the same with `node.getCustomAttributesHtml(['class', …])`.
+
 ## 6.0.0-beta.2 - 2026-11-20
 
 ### Changed
@@ -50,6 +69,23 @@ FreeNav 6 is a native Craft 6 plugin: it runs on Laravel, with no dependency on 
 - Ships every 5.2.1 fix: the custom attribute allowlist (refused on save, dropped on import, skipped on render, in the REST API and in GraphQL), linked elements the editor must be able to view, and the URL suffix check. On a site whose front end runs a framework that executes other `data-*` attributes, treat menu editors as trusted.
 - The node editor only sets node settings. A crafted save request can't move a node into another menu or change its type or linked element.
 - A custom URL may name one environment variable or alias (`$PRIMARY_SITE_URL/about`, `@web/about`). Craft 6 expands `${VAR}` anywhere in a string, which would have let a URL carry a secret in its query string, so nested variables are refused.
+
+## 5.3.0 - 2026-11-23
+
+### Added
+
+- **Visibility rules use Craft's condition builder.** The node edit panel has a rule builder with Logged In, User Group, URL Path and Page Entry Type rules, in place of typing JSON. Rules are still stored, exported and served by the REST API as the same `[{type, operator, value}]` list, and rules of other types are kept when the builder saves. ([#2](https://github.com/justinholtweb/craft-freenav/issues/2))
+- `userGroup` and `entryType` rules take a list of handles: `is` passes when any of them matches, `isNot` when none does. A single handle still works.
+- **Custom attributes are a Key / Value table** in the node edit panel, which didn't offer them before. Rows without a key are dropped, and the attribute allowlist still applies. ([#2](https://github.com/justinholtweb/craft-freenav/issues/2))
+- **Craft icon picker for nodes.** A node can have an icon from Craft's icon picker, printed as an inline SVG sized to the text (`<span class="freenav-icon">`). Only the free Font Awesome icons can be chosen, since Craft's Pro icons are licensed for the control panel only. The icon class field still works and is used when no icon is picked. The icon is in `craftIcon` on the node, the REST API, GraphQL (with `iconHtml` for the rendered SVG) and export files (format 1.3.0). ([#2](https://github.com/justinholtweb/craft-freenav/issues/2))
+- `Node::hasIcon()`. The presets use it, so they show a picked icon too.
+- **`php craft free-nav/migrate/from-section`** turns a Structure section that was used as a menu into FreeNav menus: each top-level entry becomes a menu and its descendants its nodes, or `--menu=<handle>` makes the whole section one menu. Links come from `--link-field` (Craft's Link field, relation fields and link plugins): entries and assets become element nodes, other links custom URLs, and entries without a link passive nodes. Without `--link-field` each entry links to itself. It imports through the same checks as a JSON import. ([#2](https://github.com/justinholtweb/craft-freenav/issues/2))
+
+### Fixed
+
+- **The presets didn't print custom attributes.** Only `node.getLink()` added them, so a node's custom attributes never reached the page in a menu rendered with a preset. Every preset now adds them to the node's link or label, leaving out any the preset already writes. Templates of your own can do the same with `node.getCustomAttributesHtml(['class', …])`.
+- The node edit panel's **Open in new window** switch was not saved.
+- A node that fails to save now says why in the edit panel, instead of “Couldn't save node.”
 
 ## 5.2.2 - 2026-11-20
 
